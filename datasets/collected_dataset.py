@@ -74,20 +74,20 @@ class CollectedDataset(data.Dataset):
                     cam_i = int(h5_label_file['cam'][index].item())
                     seq_i = int(h5_label_file['seq'][index].item())
                     frame_i = int(h5_label_file['frame'][index].item())
-                    
+
                     key = (sub_i,seq_i,frame_i)
                     if key not in camsets:
                         camsets[key] = {}
                     camsets[key][cam_i] = index
-                    
+
                     # only add if accumulated enough cameras
                     if len(camsets[key])>=useCamBatches:
                         all_keys.add(key)
-        
+
                         if seq_i not in sequence_keys:
                             sequence_keys[seq_i] = set()
                         sequence_keys[seq_i].add(key)
-                
+
             self.all_keys = list(all_keys)
             self.camsets = camsets
             self.sequence_keys = {seq: list(keyset) for seq,keyset in sequence_keys.items()}
@@ -95,13 +95,13 @@ class CollectedDataset(data.Dataset):
             pickle.dump(self.sequence_keys, open(sequence_keys_name, "wb" ) )
             pickle.dump(self.camsets, open(camsets_name, "wb" ) )
             print("DictDataset: Done initializing, listed {} camsets ({} frames) and {} sequences".format(self.__len__(), self.__len__()*useCamBatches, len(sequence_keys)))
-                   
+
     def __len__(self):
         if self.useCamBatches > 0:
             return len(self.all_keys)
         else:
             return len(self.label_dict['frame'])
-               
+
     def getLocalIndices(self, index):
         input_dict = {}
         cam = int(self.label_dict['cam'][index].item())
@@ -149,7 +149,7 @@ class CollectedDataset(data.Dataset):
             collated_examples = utils_data.default_collate_with_string(single_examples) #accumulate list of single frame results
             return collated_examples
         if self.useCamBatches > 0:
-            key = self.all_keys[index]           
+            key = self.all_keys[index]
             def getCamSubbatch(key):
                 camset = self.camsets[key]
                 cam_keys = list(camset.keys())
@@ -158,7 +158,7 @@ class CollectedDataset(data.Dataset):
                     shuffle(cam_keys)
                 cam_keys_shuffled = cam_keys[:self.useCamBatches]
                 return [self.getItemIntern(*self.getLocalIndices(camset[cami])) for cami in cam_keys_shuffled]
-            
+
             single_examples = getCamSubbatch(key)
             if self.useSubjectBatches > 0:
                 #subj = key[0]
@@ -166,7 +166,7 @@ class CollectedDataset(data.Dataset):
                 potential_keys = self.sequence_keys[seqi]
                 key_other = potential_keys[np.random.randint(len(potential_keys))]
                 single_examples = single_examples + getCamSubbatch(key_other)
-            
+
             collated_examples = utils_data.default_collate_with_string(single_examples) #accumulate list of single frame results
             return collated_examples
         else:
@@ -174,7 +174,7 @@ class CollectedDataset(data.Dataset):
 
 if __name__ == '__main__':
     dataset = CollectedDataset(
-                 data_folder='/cvlabdata1/home/rhodin/code/humanposeannotation/python/pytorch_human_reconstruction/TMP/H36M-MultiView-test',
+                 data_folder='/cvlabdata1/home/rbachman/DataSets/H36M/H36M-MultiView-test',
                  input_types=['img_crop','bg_crop'], label_types=['3D'],
                  useSubjectBatches=2, useCamBatches=4,
                  randomize=True)
@@ -182,4 +182,3 @@ if __name__ == '__main__':
     for i in range(len(dataset)):
         data = dataset.__getitem__(i)
         IPython.embed()
-
