@@ -15,7 +15,7 @@ class KLLoss(torch.nn.Module):
         self.mu_key = mu_key
         self.logvar_key = logvar_key
 
-    def forward(self, pred_dict, label_dict):
+    def forward(self, pred_dict, label_dict, reduction='sum'):
         mu = pred_dict[self.mu_key]
         logvar = pred_dict[self.logvar_key]
         if reduction == 'none':

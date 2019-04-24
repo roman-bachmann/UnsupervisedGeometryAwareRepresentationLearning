@@ -642,7 +642,7 @@ class unet(nn.Module):
             if has_fg:
                 if self.variational:
                     mu_from, mu_to = 0, self.dimension_fg
-                    logvar_from, logvar_to = self.dimension_fg:2*self.dimension_fg
+                    logvar_from, logvar_to = self.dimension_fg, 2*self.dimension_fg
                     mu_fg = output[:,mu_from:mu_to]
                     logvar_fg = output[:,logvar_from:logvar_to]
                     if self.training:
