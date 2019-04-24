@@ -271,6 +271,12 @@ class IgniteTrainNVS:
                 losses_train.append(image_imgNet_loss)
                 losses_test.append(image_imgNet_loss)
 
+        if config_dict.get('variational', False):
+            kl_div_loss = losses_generic.KLLoss(key_mu='mu_fg', key_logvar='logvar_fg')
+            kl_div_loss = losses_generic.KLLoss(key_mu='mu_3d', key_logvar='logvar_3d')
+            losses_train.append(kl_div_loss)
+            losses_test.append(kl_div_loss)
+
         loss_train = losses_generic.PreApplyCriterionListDict(losses_train, sum_losses=True)
         loss_test  = losses_generic.PreApplyCriterionListDict(losses_test,  sum_losses=True)
 
@@ -278,7 +284,7 @@ class IgniteTrainNVS:
         return loss_train, loss_test
 
     def get_parameter_description(self, config_dict):#, config_dict):
-        folder = "./output/trainNVS_{note}_{encoderType}_layers{num_encoding_layers}_implR{implicit_rotation}_s3Dp{actor_subset_3Dpose}_w3Dp{loss_weight_pose3D}_w3D{loss_weight_3d}_wRGB{loss_weight_rgb}_wGrad{loss_weight_gradient}_wImgNet{loss_weight_imageNet}_skipBG{latent_bg}_fg{latent_fg}_3d{skip_background}_lh3Dp{n_hidden_to3Dpose}_ldrop{latent_dropout}_billin{upsampling_bilinear}_fscale{feature_scale}_shuffleFG{shuffle_fg}_shuffle3d{shuffle_3d}_{training_set}_nth{every_nth_frame}_c{active_cameras}_sub{actor_subset}_bs{useCamBatches}_lr{learning_rate}_".format(**config_dict)
+        folder = "./output/trainNVS_{note}_{encoderType}_layers{num_encoding_layers}_implR{implicit_rotation}_s3Dp{actor_subset_3Dpose}_w3Dp{loss_weight_pose3D}_w3D{loss_weight_3d}_wRGB{loss_weight_rgb}_wGrad{loss_weight_gradient}_wImgNet{loss_weight_imageNet}_skipBG{latent_bg}_fg{latent_fg}_3d{skip_background}_lh3Dp{n_hidden_to3Dpose}_ldrop{latent_dropout}_billin{upsampling_bilinear}_fscale{feature_scale}_shuffleFG{shuffle_fg}_shuffle3d{shuffle_3d}_{training_set}_nth{every_nth_frame}_c{active_cameras}_sub{actor_subset}_bs{useCamBatches}_lr{learning_rate}_vae{variational}_".format(**config_dict)
         folder = folder.replace(' ','').replace('./','[DOT_SHLASH]').replace('.','o').replace('[DOT_SHLASH]','./').replace(',','_')
         #config_dict['storage_folder'] = folder
         return folder

@@ -13,11 +13,11 @@ config_dict = {
     'label_types_train' : ['img_crop','3D','bounding_box_cam','intrinsic_crop','extrinsic_rot','extrinsic_rot_inv'], #'3D',
     'label_types_test'  : ['img_crop','3D','bounding_box_cam','intrinsic_crop','extrinsic_rot','extrinsic_rot_inv'], #'3D',
     'num_workers'       : 8,
-    
+
     # problem class parameters
     'bones' : skeleton.bones_h36m,
 
-    # opt parameters    
+    # opt parameters
     'num_training_iterations' : 600000,
     'save_every' : 100000,
     'learning_rate' : 1e-3,# baseline: 0.001=1e-3
@@ -31,7 +31,7 @@ config_dict = {
     'outputDimension_3d' : numJoints * 3,
     'outputDimension_2d' : inputDimension // 8,
 
-    # loss 
+    # loss
     'train_scale_normalized' : True,
     'train_crop_relative' : False,
 
@@ -41,7 +41,7 @@ config_dict = {
     'img_std' : (0.229, 0.224, 0.225),
     'actor_subset' : [1,5,6,7,8], # all training subjects
     'actor_subset_3Dpose' : [1,9,11],
-    'active_cameras' : False, 
+    'active_cameras' : False,
     'inputDimension' : inputDimension,
     'mirror_augmentation' : False,
     'perspectiveCorrection' : True,
@@ -51,7 +51,7 @@ config_dict = {
     'seam_scaling' : 1.0,
     'useCamBatches' : 4,
     'every_nth_frame' : 1,
-    
+
     'note' : 'resL3',
 
     # encode decode
@@ -75,7 +75,7 @@ config_dict = {
     'implicit_rotation' : False,
     'predict_rotation' : False,
     'skip_background' : True,
-    
+    'variational' : False
 }
 
 # learning rate influence
@@ -125,3 +125,7 @@ if 0:
     config_dict['actor_subset'] = [1,5,6,7,8]
     #config_dict['actor_subset'] = [1,5,6]
     #config_dict['actor_subset'] = [1,5]
+
+# Enable Variational Autoencoder
+if 1:
+    config_dict['variational'] = True

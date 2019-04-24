@@ -5,9 +5,26 @@ class LossOnDict(torch.nn.Module):
         super(LossOnDict, self).__init__()
         self.key = key
         self.loss = loss
-        
+
     def forward(self, pred_dict, label_dict):
         return self.loss(pred_dict[self.key], label_dict[self.key])
+
+class KLLoss(torch.nn.Module):
+    def __init__(self, mu_key, logvar_key, reduction='none'):
+        super(KLLoss, self).__init__()
+        self.mu_key = mu_key
+        self.logvar_key = logvar_key
+
+    def forward(self, pred_dict, label_dict):
+        mu = pred_dict[self.mu_key]
+        logvar = pred_dict[self.logvar_key]
+        if reduction == 'none':
+            return -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1)
+        elif reduction == 'mean':
+            return -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1).mean()
+        elif reduction == 'sum':
+            return -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+
 
 class PreApplyCriterionListDict(torch.nn.Module):
     """
@@ -37,7 +54,7 @@ class PreApplyCriterionListDict(torch.nn.Module):
             return sum(losslist)
         else:
             return losslist
-        
+
 class LossLabelMeanStdNormalized(torch.nn.Module):
     """
     Normalize the label before applying the specified loss (could be normalized loss..)
@@ -66,7 +83,7 @@ class LossLabelMeanStdNormalized(torch.nn.Module):
             return self.weight * sum(errors) / len(errors)
 
         return self.weight * self.loss_single.forward(pred_pose,label_pose_norm)
-    
+
 class LossLabelMeanStdUnNormalized(torch.nn.Module):
     """
     UnNormalize the prediction before applying the specified loss (could be normalized loss..)
@@ -84,12 +101,12 @@ class LossLabelMeanStdUnNormalized(torch.nn.Module):
         label_mean = labels['pose_mean']
         label_std = labels['pose_std']
         pred_pose = preds[self.key]
-        
+
         if self.scale_normalized:
             per_frame_norm_label = label_pose.norm(dim=1).expand_as(label_pose)
             per_frame_norm_pred  = pred_pose.norm(dim=1).expand_as(label_pose)
             pred_pose = pred_pose / per_frame_norm_pred * per_frame_norm_label
 
         pred_pose_norm = (pred_pose*label_std) + label_mean
-        
+
         return self.weight*self.loss_single.forward(pred_pose_norm, label_pose)
