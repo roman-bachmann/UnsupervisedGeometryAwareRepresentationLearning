@@ -6,7 +6,7 @@ inputDimension = 128
 
 config_dict = {
     # general params
-    'dpi' : 190,
+    'dpi' : 300,
     'config_class_file': 'dict_configs/config_class_encodeDecode.py',
     'input_types'       : ['img_crop','extrinsic_rot','extrinsic_rot_inv','bg_crop'],
     'output_types'      : ['3D','img_crop'],
@@ -70,12 +70,14 @@ config_dict = {
     'loss_weight_gradient' : 0.01,
     'loss_weight_imageNet' : 2,
     'loss_weight_3d' : 0,
+    'loss_weight_kl' : 0.1,
     'do_maxpooling' : False,
     'encoderType' : 'UNet',
     'implicit_rotation' : False,
     'predict_rotation' : False,
     'skip_background' : True,
-    'variational' : False
+    'variational_fg' : False,
+    'variational_3d' : False,
 }
 
 # learning rate influence
@@ -128,4 +130,6 @@ if 0:
 
 # Enable Variational Autoencoder
 if 1:
-    config_dict['variational'] = True
+    config_dict['variational_fg'] = True
+    config_dict['variational_3d'] = False
+    config_dict['variational'] = config_dict['variational_fg'] or config_dict['variational_3d']

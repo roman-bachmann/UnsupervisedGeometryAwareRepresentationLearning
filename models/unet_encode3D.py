@@ -410,7 +410,8 @@ class unet(nn.Module):
                  nb_stage=1, # number of U-net stacks
                  output_types=['3D', 'img_crop', 'shuffled_pose', 'shuffled_appearance' ],
                  num_cameras=4,
-                 variational=False
+                 variational_fg=False,
+                 variational_3d=False
                  ):
         super(unet, self).__init__()
         self.in_resolution = in_resolution
@@ -430,7 +431,8 @@ class unet(nn.Module):
         assert dimension_3d % 3 == 0
         self.implicit_rotation = implicit_rotation
         self.num_cameras = num_cameras
-        self.variational = variational
+        self.variational_fg = variational_fg
+        self.variational_3d = variational_3d
 
         self.skip_connections = False
         self.skip_background = skip_background
@@ -447,12 +449,10 @@ class unet(nn.Module):
         ####################################
         ############ encoder ###############
         if self.encoderType == "ResNet":
-            if variational:
-                self.encoder = resnet_VNECT_3Donly.resnet50(pretrained=True, input_key='img_crop', output_keys=['latent_3d','2D_heat'],
-                                                        input_width=in_resolution, num_classes=2*(self.dimension_fg+self.dimension_3d))
-            else:
-                self.encoder = resnet_VNECT_3Donly.resnet50(pretrained=True, input_key='img_crop', output_keys=['latent_3d','2D_heat'],
-                                                        input_width=in_resolution, num_classes=self.dimension_fg+self.dimension_3d)
+            # Twice the latent space output size if variational
+            num_classes = (variational_fg+1) * self.dimension_fg + (variational_3d+1) * self.dimension_3d
+            self.encoder = resnet_VNECT_3Donly.resnet50(pretrained=True, input_key='img_crop', output_keys=['latent_3d','2D_heat'],
+                                                        input_width=in_resolution, num_classes=num_classes)
 
         ns = 0
         setattr(self, 'conv_1_stage' + str(ns), unetConv2(self.in_channels, self.filters[0], self.is_batchnorm, padding=1))
@@ -640,7 +640,7 @@ class unet(nn.Module):
             #IPython.embed()
             output = self.encoder.forward(input_dict_cropped)['latent_3d']
             if has_fg:
-                if self.variational:
+                if self.variational_fg:
                     mu_from, mu_to = 0, self.dimension_fg
                     logvar_from, logvar_to = self.dimension_fg, 2*self.dimension_fg
                     mu_fg = output[:,mu_from:mu_to]
@@ -651,7 +651,7 @@ class unet(nn.Module):
                         latent_fg = mu_fg
                 else:
                     latent_fg = output[:,:self.dimension_fg]
-            if self.variational:
+            if self.variational_3d:
                 mu_from, mu_to = 2*self.dimension_fg, 2*self.dimension_fg + self.dimension_3d
                 logvar_from, logvar_to = 2*self.dimension_fg + self.dimension_3d, 2*self.dimension_fg + 2*self.dimension_3d
                 mu_3d = output[:,mu_from:mu_to].contiguous().view(batch_size,-1,3)
@@ -741,10 +741,10 @@ class unet(nn.Module):
         for key in self.output_types:
             output_dict[key] = output_dict_all[key]
 
-        if self.variational:
-            if has_fg:
-                output_dict['mu_fg'] = mu_fg
-                output_dict['logvar_fg'] = logvar_fg
+        if self.variational_fg and has_fg:
+            output_dict['mu_fg'] = mu_fg
+            output_dict['logvar_fg'] = logvar_fg
+        if self.variational_3d:
             output_dict['mu_3d'] = mu_3d
             output_dict['logvar_3d'] = logvar_3d
 

@@ -162,7 +162,8 @@ class IgniteTrainNVS:
                                             implicit_rotation=config_dict['implicit_rotation'],
                                             skip_background=config_dict['skip_background'],
                                             num_cameras=num_cameras,
-                                            variational=config_dict['variational'],
+                                            variational_fg=config_dict['variational_fg'],
+                                            variational_3d=config_dict['variational_3d'],
                                             )
 
         if 'pretrained_network_path' in config_dict.keys(): # automatic
@@ -273,13 +274,14 @@ class IgniteTrainNVS:
                 losses_test.append(image_imgNet_loss)
 
         if config_dict.get('variational', False):
-            if config_dict['latent_fg'] > 0:
+            if config_dict['latent_fg'] > 0 and config_dict['variational_fg']:
                 kl_div_loss_fg = losses_generic.KLLoss(mu_key='mu_fg', logvar_key='logvar_fg')
                 losses_train.append(kl_div_loss_fg)
                 losses_test.append(kl_div_loss_fg)
-            kl_div_loss_3d = losses_generic.KLLoss(mu_key='mu_3d', logvar_key='logvar_3d')
-            losses_train.append(kl_div_loss_3d)
-            losses_test.append(kl_div_loss_3d)
+            if config_dict['variational_3d']:
+                kl_div_loss_3d = losses_generic.KLLoss(mu_key='mu_3d', logvar_key='logvar_3d')
+                losses_train.append(kl_div_loss_3d)
+                losses_test.append(kl_div_loss_3d)
 
         loss_train = losses_generic.PreApplyCriterionListDict(losses_train, sum_losses=True)
         loss_test  = losses_generic.PreApplyCriterionListDict(losses_test,  sum_losses=True)
