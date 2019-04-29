@@ -27,14 +27,14 @@ def create_supervised_trainer(model, optimizer, loss_fn, device=None):
     return engine
 
 def create_supervised_evaluator(model, metrics={}, device=None):
-    def _inference(engine, batch):  
+    def _inference(engine, batch):
         # now compute error
         model.eval()
         with torch.no_grad():
             x, y = utils_data.nestedDictToDevice(batch, device=device) # make it work for dict input too
             y_pred = model(x)
-            
-        return y_pred, y        
+
+        return y_pred, y
 
     engine = Engine(_inference)
 
@@ -42,7 +42,7 @@ def create_supervised_evaluator(model, metrics={}, device=None):
         metric.attach(engine, name)
 
     return engine
-    
+
 def save_training_error(save_path, engine, vis, vis_windows):
     # log training error
     iteration = engine.state.iteration - 1
@@ -58,7 +58,7 @@ def save_training_error(save_path, engine, vis, vis_windows):
     log_name = os.path.join(save_path, 'debug_log_training.txt')
     if iteration ==0:
         with open(log_name, 'w') as the_file: # overwrite exiting file
-            the_file.write('#iteration,loss\n')     
+            the_file.write('#iteration,loss\n')
     with open(log_name, 'a') as the_file:
         the_file.write('{},{}\n'.format(iteration, loss))
 
@@ -81,11 +81,11 @@ def save_testing_error(save_path, trainer, evaluator, vis, vis_windows):
     log_name = os.path.join(save_path, 'debug_log_testing.txt')
     if iteration ==0:
         with open(log_name, 'w') as the_file: # overwrite exiting file
-            the_file.write('#iteration,loss1,loss2,...\n')     
+            the_file.write('#iteration,loss1,loss2,...\n')
     with open(log_name, 'a') as the_file:
         the_file.write('{},{}\n'.format(iteration, ",".join(map(str, accuracies)) ))
     return sum(accuracies)
-        
+
 def save_training_example(save_path, engine, vis, vis_windows, config_dict):
     # print training examples
     iteration = engine.state.iteration - 1
@@ -108,13 +108,13 @@ def save_test_example(save_path, trainer, evaluator, vis, vis_windows, config_di
     output, gt = evaluator.state.output # Note, comes in a different order as for training
     mode='testing_{}'.format(iteration_global)
     img_name = os.path.join(save_path, 'debug_images_{}_{:06d}.jpg'.format(mode,iteration))
-    utils_plot_batch.plot_iol(inputs, labels, output, config_dict, mode, img_name)               
+    utils_plot_batch.plot_iol(inputs, labels, output, config_dict, mode, img_name)
     if vis is not None:
         img = mpimg.imread(img_name)
         title="Testing example"+" (test iteration {})".format(iteration)
         vis_windows[title] = vis.image(img.transpose(2,0,1), win=vis_windows.get(title,None),
                                     opts=dict(title=title+" (training iteration {})".format(iteration_global)))
-    
+
 def load_model_state(save_path, model, optimizer, state):
     model.load_state_dict(torch.load(os.path.join(save_path,"network_best_val_t1.pth")))
     optimizer.load_state_dict(torch.load(os.path.join(save_path,"optimizer_best_val_t1.pth")))
@@ -126,7 +126,7 @@ def save_model_state(save_path, engine, current_loss, model, optimizer, state):
     # update the best value
     best_val = engine.state.metrics.get('best_val', 99999999)
     engine.state.metrics['best_val'] = np.minimum(current_loss, best_val)
-    
+
     print("Saving last model")
     model_path = os.path.join(save_path,"models/")
     if not os.path.exists(model_path):
@@ -135,7 +135,7 @@ def save_model_state(save_path, engine, current_loss, model, optimizer, state):
     torch.save(optimizer.state_dict(), os.path.join(model_path,"optimizer_last_val.pth"))
     state_variables = {key:value for key, value in engine.state.__dict__.items() if key in ['iteration','metrics']}
     pickle.dump(state_variables, open(os.path.join(model_path,"state_last_val.pickle"),'wb'))
-    
+
     if current_loss==engine.state.metrics['best_val']:
         print("Saving best model (previous best_loss={} > current_loss={})".format(best_val, current_loss))
         
@@ -172,11 +172,11 @@ class AccumulatedLoss(Metric):
             raise NotComputableError(
                 'Loss must have at least one example before it can be computed')
         return self._sum / self._num_examples
-    
-    
+
+
 def transfer_partial_weights(state_dict_other, obj, submodule=0, prefix=None, add_prefix=''):
     print('Transferring weights...')
-    
+
     if 0:
         print('\nStates source\n')
         for name, param in state_dict_other.items():
@@ -184,7 +184,7 @@ def transfer_partial_weights(state_dict_other, obj, submodule=0, prefix=None, ad
         print('\nStates target\n')
         for name, param in obj.state_dict().items():
             print(name)
-        
+
     own_state = obj.state_dict()
     copyCount = 0
     skipCount = 0
@@ -202,7 +202,7 @@ def transfer_partial_weights(state_dict_other, obj, submodule=0, prefix=None, ad
         if prefix is not None and not name_raw.startswith(prefix):
             #print("skipping {} because of prefix {}".format(name_raw, prefix))
             continue
-        
+
         # remove the path of the submodule from which we load
         name = add_prefix+".".join(name_raw.split('.')[submodule:])
 
@@ -215,7 +215,7 @@ def transfer_partial_weights(state_dict_other, obj, submodule=0, prefix=None, ad
                 else:
                     print('Invalid param size(own={} vs. source={}), skipping {}'.format(own_state[name].size(), param.size(), name))
                     skipCount += 1
-            
+
             elif hasattr(own_state[name],'copy'):
                 own_state[name] = param.copy()
                 copyCount += 1
@@ -228,5 +228,5 @@ def transfer_partial_weights(state_dict_other, obj, submodule=0, prefix=None, ad
             skipCount += 1
             print('Warning, no match for {}, ignoring'.format(name))
             #print(' since own_state.keys() = ',own_state.keys())
-            
+
     print('Copied {} elements, {} skipped, and {} target params without source'.format(copyCount, skipCount, paramCount-copyCount))

@@ -10,20 +10,23 @@ class LossOnDict(torch.nn.Module):
         return self.loss(pred_dict[self.key], label_dict[self.key])
 
 class KLLoss(torch.nn.Module):
-    def __init__(self, mu_key, logvar_key, reduction='none'):
+    def __init__(self, mu_key, logvar_key, reduction='mean'):
         super(KLLoss, self).__init__()
         self.mu_key = mu_key
         self.logvar_key = logvar_key
+        self.reduction = reduction
 
-    def forward(self, pred_dict, label_dict, reduction='sum'):
+    def forward(self, pred_dict, label_dict):
         mu = pred_dict[self.mu_key]
         logvar = pred_dict[self.logvar_key]
-        if reduction == 'none':
+        if self.reduction == 'none':
             return -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1)
-        elif reduction == 'mean':
+        elif self.reduction == 'mean':
             return -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1).mean()
-        elif reduction == 'sum':
+        elif self.reduction == 'sum':
             return -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+        else:
+            raise Exception('No valid reduction specified.')
 
 
 class PreApplyCriterionListDict(torch.nn.Module):
