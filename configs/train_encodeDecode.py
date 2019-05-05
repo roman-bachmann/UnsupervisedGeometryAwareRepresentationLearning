@@ -279,7 +279,7 @@ class IgniteTrainNVS:
                 losses_train.append(kl_div_loss_fg)
                 losses_test.append(kl_div_loss_fg)
             if config_dict['variational_3d']:
-                kl_div_loss_3d = losses_generic.KLLoss(mu_key='mu_3d', logvar_key='logvar_3d')
+                kl_div_loss_3d = 0.1 * losses_generic.KLLoss(mu_key='mu_3d', logvar_key='logvar_3d')
                 losses_train.append(kl_div_loss_3d)
                 losses_test.append(kl_div_loss_3d)
 
@@ -290,7 +290,7 @@ class IgniteTrainNVS:
         return loss_train, loss_test
 
     def get_parameter_description(self, config_dict):#, config_dict):
-        folder = "./output/trainNVS_{note}_{encoderType}_layers{num_encoding_layers}_implR{implicit_rotation}_s3Dp{actor_subset_3Dpose}_w3Dp{loss_weight_pose3D}_w3D{loss_weight_3d}_wRGB{loss_weight_rgb}_wGrad{loss_weight_gradient}_wImgNet{loss_weight_imageNet}_skipBG{latent_bg}_fg{latent_fg}_3d{skip_background}_lh3Dp{n_hidden_to3Dpose}_ldrop{latent_dropout}_billin{upsampling_bilinear}_fscale{feature_scale}_shuffleFG{shuffle_fg}_shuffle3d{shuffle_3d}_{training_set}_nth{every_nth_frame}_c{active_cameras}_sub{actor_subset}_bs{useCamBatches}_lr{learning_rate}_vae{variational}_".format(**config_dict)
+        folder = "./output/trainNVS_{note}_{encoderType}_layers{num_encoding_layers}_implR{implicit_rotation}_s3Dp{actor_subset_3Dpose}_w3Dp{loss_weight_pose3D}_w3D{loss_weight_3d}_wRGB{loss_weight_rgb}_wGrad{loss_weight_gradient}_wImgNet{loss_weight_imageNet}_skipBG{latent_bg}_fg{latent_fg}_3d{skip_background}_lh3Dp{n_hidden_to3Dpose}_ldrop{latent_dropout}_billin{upsampling_bilinear}_fscale{feature_scale}_shuffleFG{shuffle_fg}_shuffle3d{shuffle_3d}_{training_set}_nth{every_nth_frame}_c{active_cameras}_sub{actor_subset}_bs{useCamBatches}_lr{learning_rate}_vaeFG{variational_fg}_vae3d{variational_3d}_".format(**config_dict)
         folder = folder.replace(' ','').replace('./','[DOT_SHLASH]').replace('.','o').replace('[DOT_SHLASH]','./').replace(',','_')
         #config_dict['storage_folder'] = folder
         return folder

@@ -131,5 +131,5 @@ if 0:
 # Enable Variational Autoencoder
 if 1:
     config_dict['variational_fg'] = True
-    config_dict['variational_3d'] = False
+    config_dict['variational_3d'] = True
     config_dict['variational'] = config_dict['variational_fg'] or config_dict['variational_3d']
