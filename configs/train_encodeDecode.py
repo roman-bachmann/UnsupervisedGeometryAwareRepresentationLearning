@@ -279,12 +279,12 @@ class IgniteTrainNVS:
                 losses_train.append(kl_div_loss_fg)
                 losses_test.append(kl_div_loss_fg)
             if config_dict['variational_3d']:
-                kl_div_loss_3d = 0.1 * losses_generic.KLLoss(mu_key='mu_3d', logvar_key='logvar_3d')
+                kl_div_loss_3d = losses_generic.KLLoss(mu_key='mu_3d', logvar_key='logvar_3d')
                 losses_train.append(kl_div_loss_3d)
                 losses_test.append(kl_div_loss_3d)
 
-        loss_train = losses_generic.PreApplyCriterionListDict(losses_train, sum_losses=True)
-        loss_test  = losses_generic.PreApplyCriterionListDict(losses_test,  sum_losses=True)
+        loss_train = losses_generic.PreApplyCriterionListDict(losses_train, sum_losses=True, loss_weights=[1,1,1,0.01])
+        loss_test  = losses_generic.PreApplyCriterionListDict(losses_test,  sum_losses=True, loss_weights=[1,1,1,0.01])
 
         # annotation and pred is organized as a list, to facilitate multiple output types (e.g. heatmap and 3d loss)
         return loss_train, loss_test
