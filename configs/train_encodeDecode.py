@@ -261,40 +261,73 @@ class IgniteTrainNVS:
         image_imgNet_bare = losses_images.ImageNetCriterium(criterion=pairwise_loss, weight=config_dict['loss_weight_imageNet'], do_maxpooling=config_dict.get('do_maxpooling',True))
         image_imgNet_loss = losses_generic.LossOnDict(key='img_crop', loss=image_imgNet_bare)
 
-        losses_train = []
-        losses_test = []
-        loss_weights = []
+        # losses_train = []
+        # losses_test = []
+        # loss_weights = []
+        #
+        # if 'img_crop' in config_dict['output_types']:
+        #     if config_dict['loss_weight_rgb']>0:
+        #         losses_train.append(image_pixel_loss)
+        #         losses_test.append(image_pixel_loss)
+        #         loss_weights.append(config_dict['loss_weight_rgb'])
+        #     if config_dict['loss_weight_imageNet']>0:
+        #         losses_train.append(image_imgNet_loss)
+        #         losses_test.append(image_imgNet_loss)
+        #         loss_weights.append(config_dict['loss_weight_imageNet'])
+        #
+        # if config_dict.get('variational', False):
+        #     if config_dict['latent_fg'] > 0 and config_dict['variational_fg'] and config_dict['loss_weight_kl_fg'] > 0:
+        #         kl_div_loss_fg = losses_generic.KLLoss(mu_key='mu_fg', logvar_key='logvar_fg')
+        #         losses_train.append(kl_div_loss_fg)
+        #         losses_test.append(kl_div_loss_fg)
+        #         loss_weights.append(config_dict['loss_weight_kl_fg'])
+        #     if config_dict['variational_3d'] and config_dict['loss_weight_kl_3d'] > 0:
+        #         kl_div_loss_3d = losses_generic.KLLoss(mu_key='mu_3d', logvar_key='logvar_3d')
+        #         losses_train.append(kl_div_loss_3d)
+        #         losses_test.append(kl_div_loss_3d)
+        #         loss_weights.append(config_dict['loss_weight_kl_3d'])
+        #
+        # loss_train = losses_generic.PreApplyCriterionListDict(losses_train, sum_losses=True, loss_weights=loss_weights)
+        # loss_test  = losses_generic.PreApplyCriterionListDict(losses_test,  sum_losses=True, loss_weights=loss_weights)
+
+        losses_train = {}
+        losses_test = {}
+        loss_weights = {}
 
         if 'img_crop' in config_dict['output_types']:
             if config_dict['loss_weight_rgb']>0:
-                losses_train.append(image_pixel_loss)
-                losses_test.append(image_pixel_loss)
-                loss_weights.append(config_dict['loss_weight_rgb'])
+                losses_train['rgb'] = image_pixel_loss
+                losses_test['rgb'] = image_pixel_loss
+                loss_weights['rgb'] = config_dict['loss_weight_rgb']
             if config_dict['loss_weight_imageNet']>0:
-                losses_train.append(image_imgNet_loss)
-                losses_test.append(image_imgNet_loss)
-                loss_weights.append(config_dict['loss_weight_imageNet'])
+                losses_train['imageNet'] = image_imgNet_loss
+                losses_test['imageNet'] = image_imgNet_loss
+                loss_weights['imageNet'] = config_dict['loss_weight_imageNet']
 
         if config_dict.get('variational', False):
             if config_dict['latent_fg'] > 0 and config_dict['variational_fg'] and config_dict['loss_weight_kl_fg'] > 0:
                 kl_div_loss_fg = losses_generic.KLLoss(mu_key='mu_fg', logvar_key='logvar_fg')
-                losses_train.append(kl_div_loss_fg)
-                losses_test.append(kl_div_loss_fg)
-                loss_weights.append(config_dict['loss_weight_kl_fg'])
+                losses_train['kl_fg'] = kl_div_loss_fg
+                losses_test['kl_fg'] = kl_div_loss_fg
+                loss_weights['kl_fg'] = config_dict['loss_weight_kl_fg']
             if config_dict['variational_3d'] and config_dict['loss_weight_kl_3d'] > 0:
                 kl_div_loss_3d = losses_generic.KLLoss(mu_key='mu_3d', logvar_key='logvar_3d')
-                losses_train.append(kl_div_loss_3d)
-                losses_test.append(kl_div_loss_3d)
-                loss_weights.append(config_dict['loss_weight_kl_3d'])
+                losses_train['kl_3d'] = kl_div_loss_3d
+                losses_test['kl_3d'] = kl_div_loss_3d
+                loss_weights['kl_3d'] = config_dict['loss_weight_kl_3d']
 
-        loss_train = losses_generic.PreApplyCriterionListDict(losses_train, sum_losses=True, loss_weights=loss_weights)
-        loss_test  = losses_generic.PreApplyCriterionListDict(losses_test,  sum_losses=True, loss_weights=loss_weights)
+        loss_train = losses_generic.PreApplyCriterionDictDict(losses_train, sum_losses=True,
+                                                              loss_weights=loss_weights,
+                                                              KL_annealing=config_dict['kl_annealing'])
+        loss_test  = losses_generic.PreApplyCriterionDictDict(losses_test,  sum_losses=True,
+                                                              loss_weights=loss_weights,
+                                                              KL_annealing=config_dict['kl_annealing'])
 
         # annotation and pred is organized as a list, to facilitate multiple output types (e.g. heatmap and 3d loss)
         return loss_train, loss_test
 
     def get_parameter_description(self, config_dict):#, config_dict):
-        folder = "./output/trainNVS_{note}_{encoderType}_layers{num_encoding_layers}_implR{implicit_rotation}_s3Dp{actor_subset_3Dpose}_w3Dp{loss_weight_pose3D}_w3D{loss_weight_3d}_wRGB{loss_weight_rgb}_wGrad{loss_weight_gradient}_wImgNet{loss_weight_imageNet}_skipBG{latent_bg}_fg{latent_fg}_3d{skip_background}_lh3Dp{n_hidden_to3Dpose}_ldrop{latent_dropout}_billin{upsampling_bilinear}_fscale{feature_scale}_shuffleFG{shuffle_fg}_shuffle3d{shuffle_3d}_{training_set}_nth{every_nth_frame}_c{active_cameras}_sub{actor_subset}_bs{useCamBatches}_lr{learning_rate}_vaeFG{variational_fg}_vae3d{variational_3d}_kl3d{loss_weight_kl_3d}_".format(**config_dict)
+        folder = "./output/trainNVS_{note}_{encoderType}_layers{num_encoding_layers}_implR{implicit_rotation}_s3Dp{actor_subset_3Dpose}_w3Dp{loss_weight_pose3D}_w3D{loss_weight_3d}_wRGB{loss_weight_rgb}_wGrad{loss_weight_gradient}_wImgNet{loss_weight_imageNet}_skipBG{latent_bg}_fg{latent_fg}_3d{skip_background}_lh3Dp{n_hidden_to3Dpose}_ldrop{latent_dropout}_billin{upsampling_bilinear}_fscale{feature_scale}_shuffleFG{shuffle_fg}_shuffle3d{shuffle_3d}_{training_set}_nth{every_nth_frame}_c{active_cameras}_sub{actor_subset}_bs{useCamBatches}_lr{learning_rate}_vaeFG{variational_fg}_vae3d{variational_3d}_kl3d{loss_weight_kl_3d}_klann{kl_annealing}_".format(**config_dict)
         folder = folder.replace(' ','').replace('./','[DOT_SHLASH]').replace('.','o').replace('[DOT_SHLASH]','./').replace(',','_')
         #config_dict['storage_folder'] = folder
         return folder

@@ -39,7 +39,7 @@ class PreApplyCriterionListDict(torch.nn.Module):
         self.sum_losses = sum_losses
         self.loss_weights = loss_weights
 
-    def forward(self, pred_dict, label_dict):
+    def forward(self, pred_dict, label_dict, iteration=None):
         """
         The loss is computed as the sum of all the loss values
         :param pred_dict: List containing the predictions
@@ -51,6 +51,41 @@ class PreApplyCriterionListDict(torch.nn.Module):
             loss_i = criterion_single(pred_dict, label_dict)
             if self.loss_weights is not None:
                 loss_i = loss_i * self.loss_weights[criterion_idx]
+            losslist.append(loss_i)
+
+        if self.sum_losses:
+            return sum(losslist)
+        else:
+            return losslist
+
+class PreApplyCriterionDictDict(torch.nn.Module):
+    """
+    Wraps a loss operating on tensors into one that processes dict of labels and predictions.
+    Includes KL annealing.
+    """
+    def __init__(self, criterions_single, sum_losses=True, loss_weights=None, KL_annealing=0):
+        super(PreApplyCriterionListDict, self).__init__()
+        self.criterions_single = criterions_single
+        self.sum_losses = sum_losses
+        self.loss_weights = loss_weights
+        self.KL_annealing = KL_annealing
+
+    def forward(self, pred_dict, label_dict, iteration=-1):
+        """
+        The loss is computed as the sum of all the loss values
+        :param pred_dict: List containing the predictions
+        :param label_dict: List containing the labels
+        :return: The sum of all the loss values computed
+        """
+        annealing_factor = 1 if iteration < 0 or >= self.KL_annealing else iteration / self.KL_annealing
+
+        losslist = []
+        for criterion_id, criterion_single in self.criterions_single.items():
+            loss_i = criterion_single(pred_dict, label_dict)
+            if self.loss_weights is not None:
+                loss_i = loss_i * self.loss_weights[criterion_id]
+            if self.KL_annealing > 0 and (criterion_id == 'kl_fg' or criterion_id == 'kl_3d'):
+                loss_i = loss_i * annealing_factor
             losslist.append(loss_i)
 
         if self.sum_losses:

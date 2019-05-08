@@ -19,7 +19,7 @@ def create_supervised_trainer(model, optimizer, loss_fn, device=None):
         optimizer.zero_grad()
         x, y = utils_data.nestedDictToDevice(batch, device=device) # make it work for dict input too
         y_pred = model(x)
-        loss = loss_fn(y_pred, y)
+        loss = loss_fn(y_pred, y, iteration=engine.state.iteration - 1)
         loss.backward()
         optimizer.step()
         return loss.item(), y_pred
@@ -138,7 +138,7 @@ def save_model_state(save_path, engine, current_loss, model, optimizer, state):
 
     if current_loss==engine.state.metrics['best_val']:
         print("Saving best model (previous best_loss={} > current_loss={})".format(best_val, current_loss))
-        
+
         torch.save(model.state_dict(), os.path.join(model_path,"network_best_val_t1.pth"))
         torch.save(optimizer.state_dict(), os.path.join(model_path,"optimizer_best_val_t1.pth"))
         state_variables = {key:value for key, value in engine.state.__dict__.items() if key in ['iteration','metrics']}
