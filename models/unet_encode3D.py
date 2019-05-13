@@ -648,7 +648,8 @@ class unet(nn.Module):
                     if self.training:
                         latent_fg = reparameterize(mu_fg, logvar_fg)
                     else:
-                        latent_fg = mu_fg
+                        # latent_fg = mu_fg
+                        latent_fg = reparameterize(mu_fg, logvar_fg)
                 else:
                     latent_fg = output[:,:self.dimension_fg]
             if self.variational_3d:
@@ -659,7 +660,8 @@ class unet(nn.Module):
                 if self.training:
                     latent_3d = reparameterize(mu_3d, logvar_3d)
                 else:
-                    latent_3d = mu_3d
+                    # latent_3d = mu_3d
+                    latent_3d = reparameterize(mu_3d, logvar_3d)
             else:
                 latent_3d = output[:,self.dimension_fg:self.dimension_fg+self.dimension_3d].contiguous().view(batch_size,-1,3)
         else: # UNet encoder

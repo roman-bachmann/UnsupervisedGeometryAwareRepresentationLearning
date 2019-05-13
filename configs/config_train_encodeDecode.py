@@ -136,7 +136,7 @@ if 1:
     config_dict['variational_fg'] = True
     config_dict['variational_3d'] = True
     config_dict['variational'] = config_dict['variational_fg'] or config_dict['variational_3d']
-    
+
     config_dict['kl_annealing'] = 100000
     config_dict['loss_weight_kl_fg'] = 1
-    config_dict['loss_weight_kl_3d'] = 1
+    config_dict['loss_weight_kl_3d'] = 0.01

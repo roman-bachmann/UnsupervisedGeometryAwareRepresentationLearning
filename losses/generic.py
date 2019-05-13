@@ -64,7 +64,7 @@ class PreApplyCriterionDictDict(torch.nn.Module):
     Includes KL annealing.
     """
     def __init__(self, criterions_single, sum_losses=True, loss_weights=None, KL_annealing=0):
-        super(PreApplyCriterionListDict, self).__init__()
+        super(PreApplyCriterionDictDict, self).__init__()
         self.criterions_single = criterions_single
         self.sum_losses = sum_losses
         self.loss_weights = loss_weights
@@ -77,7 +77,7 @@ class PreApplyCriterionDictDict(torch.nn.Module):
         :param label_dict: List containing the labels
         :return: The sum of all the loss values computed
         """
-        annealing_factor = 1 if iteration < 0 or >= self.KL_annealing else iteration / self.KL_annealing
+        annealing_factor = 1 if iteration < 0 or iteration >= self.KL_annealing else iteration / self.KL_annealing
 
         losslist = []
         for criterion_id, criterion_single in self.criterions_single.items():
