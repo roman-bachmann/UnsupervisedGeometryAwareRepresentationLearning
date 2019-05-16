@@ -9,7 +9,7 @@ config_dict = {
     'dpi' : 300,
     'config_class_file': 'dict_configs/config_class_encodeDecode.py',
     'input_types'       : ['img_crop','extrinsic_rot','extrinsic_rot_inv','bg_crop'],
-    'output_types'      : ['3D','img_crop'],
+    'output_types'      : ['3D','img_crop', 'shuffled_appearance', 'latent_3d'],
     'label_types_train' : ['img_crop','3D','bounding_box_cam','intrinsic_crop','extrinsic_rot','extrinsic_rot_inv'], #'3D',
     'label_types_test'  : ['img_crop','3D','bounding_box_cam','intrinsic_crop','extrinsic_rot','extrinsic_rot_inv'], #'3D',
     'num_workers'       : 8,
@@ -138,5 +138,5 @@ if 1:
     config_dict['variational'] = config_dict['variational_fg'] or config_dict['variational_3d']
 
     config_dict['kl_annealing'] = 100000
-    config_dict['loss_weight_kl_fg'] = 1
+    config_dict['loss_weight_kl_fg'] = 0.01
     config_dict['loss_weight_kl_3d'] = 0.01

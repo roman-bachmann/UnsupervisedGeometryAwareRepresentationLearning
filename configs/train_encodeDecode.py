@@ -11,6 +11,7 @@ from utils import io as utils_io
 from utils import datasets as utils_data
 from utils import training as utils_train
 from utils import plot_dict_batch as utils_plot_batch
+from utils import plotting as utils_plt
 
 from models import unet_encode3D
 from losses import generic as losses_generic
@@ -115,6 +116,79 @@ class IgniteTrainNVS:
 
             # save the best model
             utils_train.save_model_state(save_path, trainer, avg_accuracy, model, optimizer, engine.state)
+
+        # Save latent variables and plot statistics about them
+        @trainer.on(Events.ITERATION_COMPLETED)
+        def validate_latent_space(engine):
+            iteration = engine.state.iteration - 1
+            if (iteration+1) % config_dict['test_every'] != 0: # +1 to prevent evaluation at iteration 0
+                return
+
+            # Create empty tensors to save latent spaces in
+            if config_dict['variational_fg'] and config_dict['latent_fg'] > 0:
+                mus_fg = torch.zeros(len(test_loader), config_dict['latent_fg'])
+                logvars_fg = torch.zeros(len(test_loader), config_dict['latent_fg'])
+            else:
+                mus_fg, logvars_fg = None, None
+            latent_fg = torch.zeros(len(test_loader), config_dict['latent_fg'])
+            if config_dict['variational_3d']:
+                mus_3d = torch.zeros(len(test_loader), config_dict['latent_3d']//3, 3)
+                logvars_3d = torch.zeros(len(test_loader), config_dict['latent_3d']//3, 3)
+            else:
+                mus_3d, logvars_3d = None, None
+            latent_3d = torch.zeros(len(test_loader), config_dict['latent_3d']//3, 3)
+
+            # Iterate over all images and save their latent spaces
+            model.eval()
+            with torch.no_grad():
+                for iter, (input_dict, label_dict) in enumerate(test_loader):
+                    input_dict['external_rotation_global'] = torch.from_numpy(np.eye(3)).float().cuda()
+                    input_dict_cuda, label_dict_cuda = utils_data.nestedDictToDevice((input_dict, label_dict), device=device)
+                    output_dict_cuda = model(input_dict_cuda)
+                    output_dict = utils_data.nestedDictToDevice(output_dict_cuda, device='cpu')
+
+                    if config_dict['variational_fg'] and config_dict['latent_fg'] > 0:
+                        mus_fg[iter] = output_dict['mu_fg'][0]
+                        logvars_fg[iter] = output_dict['logvar_fg'][0]
+                    latent_fg[iter] = output_dict['shuffled_appearance'][0]
+
+                    if config_dict['variational_3d']:
+                        mus_3d[iter] = output_dict['mu_3d'][0]
+                        logvars_3d[iter] = output_dict['logvar_3d'][0]
+                    latent_3d[iter] = output_dict['latent_3d'][0]
+            model.train()
+
+            # Save to disk
+            latent_path = os.path.join(save_path, 'latent')
+            latent_data_path = os.path.join(latent_path, 'data')
+            if not os.path.exists(latent_data_path):
+                os.makedirs(latent_data_path)
+            if config_dict['variational_fg'] and config_dict['latent_fg'] > 0:
+                mus_fg = mus_fg.numpy()
+                np.save(os.path.join(latent_data_path,'mus_fg.npy'), mus_fg)
+                logvars_fg = logvars_fg.numpy()
+                np.save(os.path.join(latent_data_path,'logvars_fg.npy'), logvars_fg)
+            latent_fg = latent_fg.numpy()
+            np.save(os.path.join(latent_data_path,'latent_fg.npy'), latent_fg)
+            if config_dict['variational_3d']:
+                mus_3d = mus_3d.numpy()
+                np.save(os.path.join(latent_data_path,'mus_3d.npy'), mus_3d)
+                logvars_3d = logvars_3d.numpy()
+                np.save(os.path.join(latent_data_path,'logvars_3d.npy'), logvars_3d)
+            latent_3d = latent_3d.numpy()
+            np.save(os.path.join(latent_data_path,'latent_3d.npy'), latent_3d)
+
+            # Save plots
+            utils_plt.plot_mu_std_hists(mus_fg, logvars_fg, mus_3d, logvars_3d, save_path=latent_path, save_iter=iteration+1)
+            utils_plt.analyze_mu_std(mus_fg, logvars_fg, mus_3d, logvars_3d, save_path=latent_path, save_iter=iteration+1)
+            utils_plt.plot_tsne(mus_fg, save_path=latent_path, save_iter=iteration+1, data_name='mus_fg')
+            utils_plt.plot_tsne(logvars_fg, save_path=latent_path, save_iter=iteration+1, data_name='logvars_fg')
+            utils_plt.plot_tsne(mus_3d, save_path=latent_path, save_iter=iteration+1, data_name='mus_3d')
+            utils_plt.plot_tsne(logvars_3d, save_path=latent_path, save_iter=iteration+1, data_name='logvars_3d')
+            # TODO: Fix this to enable plotting using mayavi on headless servers
+            # outlier_idxs = utils_plt.get_3d_outlier_idxs(logvars_3d) if config_dict['variational_3d'] else None
+            # utils_plt.plot_scatter_3d(mus_3d, idxs=None, complement=False, save_path=latent_save_path, save_iter=iteration)
+            # utils_plt.plot_scatter_3d(mus_3d, idxs=outlier_idxs, complement=False, save_path=latent_save_path, save_iter=iteration)
 
         # print test result
         @evaluator.on(Events.ITERATION_COMPLETED)
@@ -327,7 +401,8 @@ class IgniteTrainNVS:
         return loss_train, loss_test
 
     def get_parameter_description(self, config_dict):#, config_dict):
-        folder = "./output/trainNVS_{note}_{encoderType}_layers{num_encoding_layers}_implR{implicit_rotation}_s3Dp{actor_subset_3Dpose}_w3Dp{loss_weight_pose3D}_w3D{loss_weight_3d}_wRGB{loss_weight_rgb}_wGrad{loss_weight_gradient}_wImgNet{loss_weight_imageNet}_skipBG{latent_bg}_fg{latent_fg}_3d{skip_background}_lh3Dp{n_hidden_to3Dpose}_ldrop{latent_dropout}_billin{upsampling_bilinear}_fscale{feature_scale}_shuffleFG{shuffle_fg}_shuffle3d{shuffle_3d}_{training_set}_nth{every_nth_frame}_c{active_cameras}_sub{actor_subset}_bs{useCamBatches}_lr{learning_rate}_vaeFG{variational_fg}_vae3d{variational_3d}_kl3d{loss_weight_kl_3d}_kla{kl_annealing}_".format(**config_dict)
+        # folder = "./output/trainNVS_{note}_{encoderType}_layers{num_encoding_layers}_implR{implicit_rotation}_s3Dp{actor_subset_3Dpose}_w3Dp{loss_weight_pose3D}_w3D{loss_weight_3d}_wRGB{loss_weight_rgb}_wGrad{loss_weight_gradient}_wImgNet{loss_weight_imageNet}_skipBG{latent_bg}_fg{latent_fg}_3d{skip_background}_lh3Dp{n_hidden_to3Dpose}_ldrop{latent_dropout}_billin{upsampling_bilinear}_fscale{feature_scale}_shuffleFG{shuffle_fg}_shuffle3d{shuffle_3d}_{training_set}_nth{every_nth_frame}_c{active_cameras}_sub{actor_subset}_bs{useCamBatches}_lr{learning_rate}_vaeFG{variational_fg}_vae3d{variational_3d}_kl3d{loss_weight_kl_3d}_kla{kl_annealing}_".format(**config_dict)
+        folder = "./output/trainNVS_wRGB{loss_weight_rgb}_wImgNet{loss_weight_imageNet}_wKL3d{loss_weight_kl_3d}_wKLfg{loss_weight_kl_fg}_KLa{kl_annealing}_skipBG{latent_bg}_fg{latent_fg}_3d{skip_background}_shuffleFG{shuffle_fg}_shuffle3d{shuffle_3d}_{training_set}_lr{learning_rate}_vaeFG{variational_fg}_vae3d{variational_3d}_".format(**config_dict)
         folder = folder.replace(' ','').replace('./','[DOT_SHLASH]').replace('.','o').replace('[DOT_SHLASH]','./').replace(',','_')
         #config_dict['storage_folder'] = folder
         return folder

@@ -2,10 +2,175 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.mplot3d import proj3d
 
+import os
+import torch
 import numpy as np
 import scipy.linalg as la
+from sklearn.manifold import TSNE
 
-def plot_2Dpose(ax, pose_2d, bones, bones_dashed=[], bones_dashdot=[], colormap='hsv', 
+
+def random_color():
+    return tuple(np.random.choice(range(256), size=3) / 255)
+
+def plot_scatter_3d(d, idxs=None, complement=False, save_path=None, save_iter=0):
+    from mayavi import mlab
+    mlab.options.offscreen = True
+    figure = mlab.figure()
+    if idxs is None:
+        idxs = np.arange(d.shape[1])
+        xmin,xmax,ymin,ymax,zmin,zmax = d[:,:,0].min(), d[:,:,0].max(), d[:,:,1].min(), d[:,:,1].max(), d[:,:,2].min(), d[:,:,2].max()
+        d = d.reshape(-1,3)
+        pts = mlab.points3d(d[:,0], d[:,1], d[:,2], figure=figure, scale_mode='none', scale_factor=0.03)
+    else:
+        idxs = np.array(idxs)
+        if complement:
+            idxs = np.setdiff1d(np.arange(d.shape[1]), idxs)
+        for idx in idxs:
+            pts = mlab.points3d(d[:,idx,0], d[:,idx,1], d[:,idx,2], figure=figure, scale_mode='none', scale_factor=0.03, color=random_color())
+        xmin,xmax,ymin,ymax,zmin,zmax = d[:,idxs,0].min(), d[:,idxs,0].max(), d[:,idxs,1].min(), d[:,idxs,1].max(), d[:,idxs,2].min(), d[:,idxs,2].max()
+    mlab.axes(figure=figure, xlabel='x', ylabel='y', zlabel='z', ranges=(xmin,xmax,ymin,ymax,zmin,zmax))
+    if save_path is not None:
+        mlab.savefig(os.path.join(save_path, 'scatter3D_outl{}_i{}.pdf'.format(idxs!=None, save_iter)))
+    else:
+        mlab.show()
+    mlab.close()
+
+def reparameterize(mu, logvar):
+    std = np.exp(0.5*logvar)
+    eps = np.random.randn(*std.shape) # Sample from N(0,1)
+    return mu + eps*std
+
+def plot_samples(mus_3d, logvars_3d, img_idx, point_idxs=None, num_samples=10):
+    from mayavi import mlab
+    mlab.options.offscreen = True
+    if point_idxs is not None:
+        mu = mus_3d[img_idx, point_idxs]
+        logvar = logvars_3d[img_idx, point_idxs]
+    else:
+        mu = mus_3d[img_idx]
+        logvar = logvars_3d[img_idx]
+    figure = mlab.figure()
+    for i in range(num_samples):
+        sample = reparameterize(mu, logvar)
+        pts = mlab.points3d(sample[:,0], sample[:,1], sample[:,2], scale_mode='none', scale_factor=0.03, color=(0,0,0.5))
+    pts = mlab.points3d(mu[:,0], mu[:,1], mu[:,2], scale_mode='none', scale_factor=0.07, color=(1,0,0))
+    mlab.axes()
+    mlab.show()
+
+def plot_mu_std_hists(mus_fg, logvars_fg, mus_3d, logvars_3d, save_path=None, save_iter=0):
+    fig, ax = plt.subplots(2, 2)
+
+    if mus_fg is not None:
+        ax[0,0].set_title('$\mu_{FG}$ histogram')
+        ax[0,0].hist(mus_fg.flatten(), bins=1000)
+
+    if logvars_fg is not None:
+        ax[0,1].set_title('$\sigma_{FG}^2$ histogram')
+        std_fg = np.exp(0.5*logvars_fg.flatten())
+        ax[0,1].hist(std_fg, bins=1000)
+
+    if mus_3d is not None:
+        ax[1,0].set_title('$\mu_{3D}$ histogram')
+        ax[1,0].hist(mus_3d.flatten(), bins=1000)
+
+    if logvars_3d is not None:
+        ax[1,1].set_title('$\sigma_{3D}^2$ histogram')
+        std_3d = np.exp(0.5*logvars_3d.flatten())
+        ax[1,1].hist(std_3d, bins=1000)
+
+    plt.tight_layout()
+    if save_path is not None:
+        plt.savefig(os.path.join(save_path, 'hists_i{}.pdf'.format(save_iter)))
+    else:
+        plt.show()
+    plt.close()
+
+def analyze_mu_std(mus_fg, logvars_fg, mus_3d, logvars_3d, save_path=None, save_iter=0):
+    if mus_fg is not None:
+        plt.figure(figsize=(20,20))
+        plt.title('$\mu_{FG}$ mean per feature')
+        plt.stem(np.arange(128), mus_fg.mean(axis=0), bottom=0)
+        if save_path is not None:
+            plt.savefig(os.path.join(save_path, 'mu_fg_mean_i{}.pdf'.format(save_iter)))
+        else:
+            plt.show()
+        plt.close()
+
+    if logvars_fg is not None:
+        plt.figure(figsize=(20,20))
+        plt.title('$\sigma_{FG}^2$ mean per feature')
+        std_fg = np.exp(0.5*logvars_fg)
+        plt.stem(np.arange(128), std_fg.mean(axis=0), bottom=1)
+        if save_path is not None:
+            plt.savefig(os.path.join(save_path, 'std_fg_mean_i{}.pdf'.format(save_iter)))
+        else:
+            plt.show()
+        plt.close()
+
+    if mus_3d is not None:
+        plt.figure(figsize=(20,20))
+        plt.title('$\mu_{3D}$ mean per feature')
+        mus_3d_mean = np.linalg.norm(mus_3d, axis=2).mean(axis=0)
+        plt.stem(np.arange(200), mus_3d_mean, bottom=0)
+        if save_path is not None:
+            plt.savefig(os.path.join(save_path, 'mu_3d_norm_mean_i{}.pdf'.format(save_iter)))
+        else:
+            plt.show()
+        plt.close()
+
+        plt.figure(figsize=(20,20))
+        plt.title('$\mu_{3D}$ mean per feature')
+        mus_3d_mean = mus_3d.reshape(-1,200*3).mean(axis=0)
+        plt.stem(np.arange(200*3), mus_3d_mean, bottom=0)
+        if save_path is not None:
+            plt.savefig(os.path.join(save_path, 'mu_3d_mean_i{}.pdf'.format(save_iter)))
+        else:
+            plt.show()
+        plt.close()
+
+    if logvars_3d is not None:
+        plt.figure(figsize=(20,20))
+        plt.title('$\sigma_{3D}^2$ mean per feature')
+        std_3d = np.exp(0.5*logvars_3d)
+        std_3d_mean = np.linalg.norm(std_3d, axis=2).mean(axis=0)
+        plt.stem(np.arange(200), std_3d_mean, bottom=1)
+        if save_path is not None:
+            plt.savefig(os.path.join(save_path, 'std_3d_norm_mean_i{}.pdf'.format(save_iter)))
+        else:
+            plt.show()
+        plt.close()
+
+        plt.figure(figsize=(20,20))
+        plt.title('$\sigma_{3D}^2$ mean per feature, v2')
+        std_3d = np.exp(0.5*logvars_3d)
+        std_3d_mean = std_3d.reshape(-1,200*3).mean(axis=0)
+        plt.stem(np.arange(200*3), std_3d_mean, bottom=1)
+        if save_path is not None:
+            plt.savefig(os.path.join(save_path, 'std_3d_mean_i{}.pdf'.format(save_iter)))
+        else:
+            plt.show()
+        plt.close()
+
+def get_3d_outlier_idxs(logvars_3d):
+    std_3d = np.exp(0.5*logvars_3d)
+    std_3d_mean = np.linalg.norm(std_3d, axis=2).mean(axis=0)
+    cutoff = std_3d_mean.mean() - std_3d_mean.std()
+    outlier_idxs = np.where(std_3d_mean < cutoff)[0]
+    return outlier_idxs
+
+def plot_tsne(data, save_path=None, save_iter=0, data_name=''):
+    if len(data.shape) == 3:
+        data = data.reshape(-1,data.shape[1]*data.shape[2])
+    data_emb = TSNE(n_components=2).fit_transform(data)
+    plt.scatter(data_emb[:,0], data_emb[:,1], s=2)
+    if save_path is not None:
+        plt.savefig(os.path.join(save_path, 'tsne_{}_i{}.pdf'.format(data_name, save_iter)))
+    else:
+        plt.show()
+    plt.close()
+
+
+def plot_2Dpose(ax, pose_2d, bones, bones_dashed=[], bones_dashdot=[], colormap='hsv',
                 linewidth=1, limits=None, color_order=[0, 5, 9, 15, 2, 10, 12, 4, 14, 13, 11, 3, 7, 8, 6, 1]):
     cmap = plt.get_cmap(colormap)
 
@@ -30,7 +195,7 @@ def plot3Dsphere(ax, p, radius=5, color=(0.5, 0.5, 0.5)):
     num_samples = 8
     u = np.linspace(0, 2 * np.pi, num_samples)
     v = np.linspace(0, np.pi, num_samples)
-    
+
     x = p[0] + radius * np.outer(np.cos(u), np.sin(v))
     y = p[1] + radius * np.outer(np.sin(u), np.sin(v))
     z = p[2] + radius * np.outer(np.ones(np.size(u)), np.cos(v))
@@ -38,7 +203,7 @@ def plot3Dsphere(ax, p, radius=5, color=(0.5, 0.5, 0.5)):
     c[:,:] = color
     #ax.plot_surface(x, y, z,  rstride=4, cstride=4, color=color, alpha=1)
     return x, y, z, c
- 
+
 def plot3Dcylinder(ax, p0, p1, radius=5, color=(0.5, 0.5, 0.5)):
     num_samples = 8
     origin = np.array([0, 0, 0])
@@ -83,8 +248,8 @@ def plot_3Dpose(ax, pose_3d, bones, radius=10, colormap='gist_rainbow', color_or
     else:
         X,Y,Z = np.squeeze(np.array(pose_3d[0,:])), np.squeeze(np.array(pose_3d[1,:])), np.squeeze(np.array(pose_3d[2,:]))
     XYZ = np.vstack([X,Y,Z])
-    
-    # dummy bridge that connects different components (set to transparent) 
+
+    # dummy bridge that connects different components (set to transparent)
     def bridge_vertices(xs,ys,zs,cs, x,y,z,c):
         num_samples = x.shape[0]
         if num_samples == 0: # don't build a bridge if there is no data
@@ -104,7 +269,7 @@ def plot_3Dpose(ax, pose_3d, bones, radius=10, colormap='gist_rainbow', color_or
         zs.append(z)
         cs.append(c)
         return
-        
+
     maximum = max(color_order) #len(bones)
     xs = []
     ys = []
@@ -124,10 +289,10 @@ def plot_3Dpose(ax, pose_3d, bones, radius=10, colormap='gist_rainbow', color_or
         #bridge_vertices(xs,ys,zs,cs, x,y,z,c)
         #x,y,z,c = plot3Dsphere(ax, XYZ[:,bone[1]], radius=radius*1.2, color=color)
         #bridge_vertices(xs,ys,zs,cs, x,y,z,c)
-        
+
     if len(xs) == 0:
         return
-        
+
     # merge all sufaces together to one big one
     x_full = np.hstack(xs)
     y_full = np.hstack(ys)
@@ -141,17 +306,17 @@ def plot_3Dpose(ax, pose_3d, bones, radius=10, colormap='gist_rainbow', color_or
     #    ax.set_xlim(-1.5, 1.5)
     #    ax.set_ylim(-1.5, 1.5)
     #    ax.set_zlim(-1.5, 1.5)
-        
+
     if set_limits:
         max_range = np.array([X.max()-X.min(), Y.max()-Y.min(), Z.max()-Z.min()]).max() / 2
-    
+
         mid_x = (X.max()+X.min()) * 0.5
         mid_y = (Y.max()+Y.min()) * 0.5
         mid_z = (Z.max()+Z.min()) * 0.5
         ax.set_xlim(mid_x - max_range, mid_x + max_range)
         ax.set_ylim(mid_y - max_range, mid_y + max_range)
         ax.set_zlim(mid_z - max_range, mid_z + max_range)
-    
+
     if transparentBG:
         ax.tick_params(
             axis='x',          # changes apply to the x-axis
@@ -174,7 +339,7 @@ def plot_3Dpose(ax, pose_3d, bones, radius=10, colormap='gist_rainbow', color_or
             top='off',         # ticks along the top edge are off
             labelbottom='off',
             labelsize=8) # labels along the bottom edge are off
-        
+
         # make the bg white
         ax.xaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
         ax.yaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
