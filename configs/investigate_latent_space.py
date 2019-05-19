@@ -17,7 +17,7 @@ from ignite.engine import Events
 
 
 class IgniteTestNVS(train_encodeDecode.IgniteTrainNVS):
-    def run(self, config_dict):
+    def run(self, config_dict, save_train=False):
         config_dict['n_hidden_to3Dpose'] = config_dict.get('n_hidden_to3Dpose', 2)
 
         # load data
@@ -26,8 +26,11 @@ class IgniteTestNVS(train_encodeDecode.IgniteTrainNVS):
             import pickle
             data_loader = pickle.load(open('examples/test_set.pickl',"rb"))
         else:
-            data_loader = self.load_data_test(config_dict)
-        print('Number test images:', len(data_loader))
+            if save_train:
+                data_loader = self.load_data_train(config_dict)
+            else:
+                data_loader = self.load_data_test(config_dict)
+        print('Number of images:', len(data_loader))
 
         # load model
         model = self.load_network(config_dict)
@@ -51,18 +54,17 @@ class IgniteTestNVS(train_encodeDecode.IgniteTrainNVS):
                 mus_3d[iter] = output_dict['mu_3d'][0]
                 logvars_3d[iter] = output_dict['logvar_3d'][0]
 
-        save_path = './output/latent/'
+        save_path = './output/latent/data_train' if save_train else './output/latent/data'
         if not os.path.exists(save_path):
             os.makedirs(save_path)
-        torch.save(mus_fg, os.path.join(save_path,'mus_fg.pt'))
-        torch.save(logvars_fg, os.path.join(save_path,'logvars_fg.pt'))
-        torch.save(mus_3d, os.path.join(save_path,'mus_3d.pt'))
-        torch.save(logvars_3d, os.path.join(save_path,'logvars_3d.pt'))
-
+        np.save(os.path.join(save_path,'mus_fg.npy'), mus_fg.numpy())
+        np.save(os.path.join(save_path,'logvars_fg.npy'), logvars_fg.numpy())
+        np.save(os.path.join(save_path,'mus_3d.npy'), mus_3d.numpy())
+        np.save(os.path.join(save_path,'logvars_3d.npy'), logvars_3d.numpy())
 
 
 if __name__ == "__main__":
     config_dict_module = utils_io.loadModule("configs/config_test_encodeDecode.py")
     config_dict = config_dict_module.config_dict
     ignite = IgniteTestNVS()
-    ignite.run(config_dict)
+    ignite.run(config_dict, save_train=True)

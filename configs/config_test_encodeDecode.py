@@ -10,7 +10,7 @@ config_dict['batch_size_test'] = 1
 
 config_dict['n_hidden_to3Dpose'] = 2
 
-if 0:
+if 1:
     # NVS VAE, smaller latent space of 100*3 3D and 64 FG, KL annealing, 0.001 weight for both
     network_path = './output/trainNVS_wRGB1_wImgNet2_wKL3d0o001_wKLfg0o001_KLa100000_skipBG0_3d300_fg64_3dTrue_shuffleFGTrue_shuffle3dTrue_h36m_lr0o001_vaeFGTrue_vae3dTrue_'
     config_dict['network_path'] = network_path
@@ -18,7 +18,7 @@ if 0:
     config_dict['latent_fg'] = 64
     config_dict['latent_3d'] = 100*3
 
-if 1:
+if 0:
     # Deterministic AE, smaller latent space of 100*3 3D and 64 FG
     network_path = './output/trainNVS_wRGB1_wImgNet2_wKL3d0o001_wKLfg0o001_KLa0_skipBG0_3d300_fg64_3dTrue_shuffleFGTrue_shuffle3dTrue_h36m_lr0o001_vaeFGFalse_vae3dFalse_'
     config_dict['network_path'] = network_path
