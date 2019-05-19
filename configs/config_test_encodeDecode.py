@@ -8,12 +8,43 @@ config_dict['label_types_train'].remove('img_crop')
 config_dict['batch_size_train'] = 1
 config_dict['batch_size_test'] = 1
 
+config_dict['n_hidden_to3Dpose'] = 2
+
 if 0:
-    network_path = './output/trainNVS_resL3_ResNet_layers4_implRFalse_s3Dp[1_9_11]_w3Dp0_w3D0_wRGB1_wGrad0_wImgNet2_skipBG0_fg128_3dTrue_lh3Dp2_ldrop0o3_billinupper_fscale2_shuffleFGTrue_shuffle3dTrue_h36m_nth1_cFalse_sub[1_5_6_7_8]_bs2_lr0o001_vaeFGTrue_vae3dFalse_'
+    # NVS VAE, smaller latent space of 100*3 3D and 64 FG, KL annealing, 0.001 weight for both
+    network_path = './output/trainNVS_wRGB1_wImgNet2_wKL3d0o001_wKLfg0o001_KLa100000_skipBG0_3d300_fg64_3dTrue_shuffleFGTrue_shuffle3dTrue_h36m_lr0o001_vaeFGTrue_vae3dTrue_'
+    config_dict['network_path'] = network_path
     config_dict['pretrained_network_path'] = network_path + '/models/network_best_val_t1.pth'
+    config_dict['latent_fg'] = 64
+    config_dict['latent_3d'] = 100*3
+
 if 1:
-    network_path = './output/trainNVS_resL3_ResNet_layers4_implRFalse_s3Dp[1_9_11]_w3Dp0_w3D0_wRGB1_wGrad0_wImgNet2_skipBG0_fg128_3dTrue_lh3Dp2_ldrop0o3_billinupper_fscale2_shuffleFGTrue_shuffle3dTrue_h36m_nth1_cFalse_sub[1_5_6_7_8]_bs2_lr0o001_vaeFGTrue_vae3dTrue_kl3d0o01_kla100000_'
+    # Deterministic AE, smaller latent space of 100*3 3D and 64 FG
+    network_path = './output/trainNVS_wRGB1_wImgNet2_wKL3d0o001_wKLfg0o001_KLa0_skipBG0_3d300_fg64_3dTrue_shuffleFGTrue_shuffle3dTrue_h36m_lr0o001_vaeFGFalse_vae3dFalse_'
+    config_dict['network_path'] = network_path
     config_dict['pretrained_network_path'] = network_path + '/models/network_best_val_t1.pth'
+    config_dict['latent_fg'] = 64
+    config_dict['latent_3d'] = 100*3
+
+elif 0:
+    # Normal VAE without rotation
+    network_path = './output/trainNVS_wRGB1_wImgNet2_wKL3d0o01_wKLfg0o01_KLa100000_skipBG0_3d600_fg128_3dTrue_shuffleFGFalse_shuffle3dFalse_h36m_lr0o001_vaeFGTrue_vae3dTrue_'
+    config_dict['network_path'] = network_path
+    config_dict['pretrained_network_path'] = network_path + '/models/network_best_val_t1.pth'
+    config_dict['shuffle_fg'] = False
+    config_dict['shuffle_3d'] = False
+    config_dict['latent_fg'] = 128
+    config_dict['latent_3d'] = 200*3
+
+elif 0:
+    # Etc...
+    network_path = './output/trainNVS_resL3_ResNet_layers4_implRFalse_s3Dp[1_9_11]_w3Dp0_w3D0_wRGB1_wGrad0_wImgNet2_skipBG0_fg128_3dTrue_lh3Dp2_ldrop0o3_billinupper_fscale2_shuffleFGTrue_shuffle3dTrue_h36m_nth1_cFalse_sub[1_5_6_7_8]_bs2_lr0o001_vaeFGTrue_vae3dFalse_'
+    # network_path = './output/trainNVS_resL3_ResNet_layers4_implRFalse_s3Dp[1_9_11]_w3Dp0_w3D0_wRGB1_wGrad0_wImgNet2_skipBG0_fg128_3dTrue_lh3Dp2_ldrop0o3_billinupper_fscale2_shuffleFGTrue_shuffle3dTrue_h36m_nth1_cFalse_sub[1_5_6_7_8]_bs2_lr0o001_vaeFGTrue_vae3dTrue_kl3d0o01_kla100000_'
+    config_dict['network_path'] = network_path
+    config_dict['pretrained_network_path'] = network_path + '/models/network_best_val_t1.pth'
+    config_dict['latent_fg'] = 128
+    config_dict['latent_3d'] = 200*3
+
 else:
     network_path = './examples'
     config_dict['pretrained_network_path'] = network_path + '/network_best_val_t1.pth'

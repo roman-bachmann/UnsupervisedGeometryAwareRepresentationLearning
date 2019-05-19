@@ -89,7 +89,7 @@ def analyze_mu_std(mus_fg, logvars_fg, mus_3d, logvars_3d, save_path=None, save_
     if mus_fg is not None:
         plt.figure(figsize=(20,20))
         plt.title('$\mu_{FG}$ mean per feature')
-        plt.stem(np.arange(128), mus_fg.mean(axis=0), bottom=0)
+        plt.stem(np.arange(mus_fg.shape[1]), mus_fg.mean(axis=0), bottom=0)
         if save_path is not None:
             plt.savefig(os.path.join(save_path, 'mu_fg_mean_i{}.pdf'.format(save_iter)))
         else:
@@ -100,7 +100,7 @@ def analyze_mu_std(mus_fg, logvars_fg, mus_3d, logvars_3d, save_path=None, save_
         plt.figure(figsize=(20,20))
         plt.title('$\sigma_{FG}^2$ mean per feature')
         std_fg = np.exp(0.5*logvars_fg)
-        plt.stem(np.arange(128), std_fg.mean(axis=0), bottom=1)
+        plt.stem(np.arange(std_fg.shape[1]), std_fg.mean(axis=0), bottom=1)
         if save_path is not None:
             plt.savefig(os.path.join(save_path, 'std_fg_mean_i{}.pdf'.format(save_iter)))
         else:
@@ -111,7 +111,7 @@ def analyze_mu_std(mus_fg, logvars_fg, mus_3d, logvars_3d, save_path=None, save_
         plt.figure(figsize=(20,20))
         plt.title('$\mu_{3D}$ mean per feature')
         mus_3d_mean = np.linalg.norm(mus_3d, axis=2).mean(axis=0)
-        plt.stem(np.arange(200), mus_3d_mean, bottom=0)
+        plt.stem(np.arange(mus_3d.shape[1]), mus_3d_mean, bottom=0)
         if save_path is not None:
             plt.savefig(os.path.join(save_path, 'mu_3d_norm_mean_i{}.pdf'.format(save_iter)))
         else:
@@ -120,8 +120,8 @@ def analyze_mu_std(mus_fg, logvars_fg, mus_3d, logvars_3d, save_path=None, save_
 
         plt.figure(figsize=(20,20))
         plt.title('$\mu_{3D}$ mean per feature')
-        mus_3d_mean = mus_3d.reshape(-1,200*3).mean(axis=0)
-        plt.stem(np.arange(200*3), mus_3d_mean, bottom=0)
+        mus_3d_mean = mus_3d.reshape(-1,mus_3d.shape[1]*mus_3d.shape[2]).mean(axis=0)
+        plt.stem(np.arange(mus_3d.shape[1]*mus_3d.shape[2]), mus_3d_mean, bottom=0)
         if save_path is not None:
             plt.savefig(os.path.join(save_path, 'mu_3d_mean_i{}.pdf'.format(save_iter)))
         else:
@@ -133,7 +133,7 @@ def analyze_mu_std(mus_fg, logvars_fg, mus_3d, logvars_3d, save_path=None, save_
         plt.title('$\sigma_{3D}^2$ mean per feature')
         std_3d = np.exp(0.5*logvars_3d)
         std_3d_mean = np.linalg.norm(std_3d, axis=2).mean(axis=0)
-        plt.stem(np.arange(200), std_3d_mean, bottom=1)
+        plt.stem(np.arange(std_3d.shape[1]), std_3d_mean, bottom=1)
         if save_path is not None:
             plt.savefig(os.path.join(save_path, 'std_3d_norm_mean_i{}.pdf'.format(save_iter)))
         else:
@@ -143,8 +143,8 @@ def analyze_mu_std(mus_fg, logvars_fg, mus_3d, logvars_3d, save_path=None, save_
         plt.figure(figsize=(20,20))
         plt.title('$\sigma_{3D}^2$ mean per feature, v2')
         std_3d = np.exp(0.5*logvars_3d)
-        std_3d_mean = std_3d.reshape(-1,200*3).mean(axis=0)
-        plt.stem(np.arange(200*3), std_3d_mean, bottom=1)
+        std_3d_mean = std_3d.reshape(-1,std_3d.shape[1]*std_3d.shape[2]).mean(axis=0)
+        plt.stem(np.arange(std_3d.shape[1]*std_3d.shape[2]), std_3d_mean, bottom=1)
         if save_path is not None:
             plt.savefig(os.path.join(save_path, 'std_3d_mean_i{}.pdf'.format(save_iter)))
         else:

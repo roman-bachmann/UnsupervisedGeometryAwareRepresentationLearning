@@ -90,13 +90,18 @@ config_dict['actor_subset']  = [1,5,6,7,8]
 config_dict['batch_size_train'] = 16
 config_dict['batch_size_test'] = 8
 
-config_dict['latent_fg'] = 128; config_dict['feature_scale'] = 2
+# config_dict['latent_fg'] = 128; config_dict['feature_scale'] = 2
+config_dict['latent_fg'] = 64
+config_dict['feature_scale'] = 2
+config_dict['latent_3d'] = 100*3
 
 config_dict['loss_weight_rgb']      = 1
 config_dict['loss_weight_gradient'] = 0
 config_dict['loss_weight_imageNet'] = 2
 
 config_dict['useCamBatches'] = 2
+
+config_dict['n_hidden_to3Dpose'] = 2
 
 # classic auto encoder, with some billinear layers
 if 0:
@@ -133,10 +138,10 @@ if 0:
 
 # Variational Autoencoder
 if 1:
-    config_dict['variational_fg'] = True
-    config_dict['variational_3d'] = True
+    config_dict['variational_fg'] = False
+    config_dict['variational_3d'] = False
     config_dict['variational'] = config_dict['variational_fg'] or config_dict['variational_3d']
 
-    config_dict['kl_annealing'] = 100000
-    config_dict['loss_weight_kl_fg'] = 0.01
-    config_dict['loss_weight_kl_3d'] = 0.01
+    config_dict['kl_annealing'] = 0 #100000
+    config_dict['loss_weight_kl_fg'] = 0.001
+    config_dict['loss_weight_kl_3d'] = 0.001

@@ -147,6 +147,7 @@ class IgniteTestNVS(train_encodeDecode.IgniteTrainNVS):
 
         def update_rotation(event):
             rot = slider_yaw_glob.val
+            # rot = 0 # Cheat to sample at rotation 0 while pulling slider
             print("Rotationg ",rot)
             batch_size = input_dict['img_crop'].size()[0]
             input_dict['external_rotation_global'] = torch.from_numpy(rotationMatrixXZY(theta=0, phi=0, psi=rot)).float().cuda()
