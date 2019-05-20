@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 
-import sys
+import sys, os
 import torch
 import numpy as np
 import numpy.linalg as la
@@ -10,6 +10,7 @@ from utils import io as utils_io
 from utils import datasets as utils_data
 from utils import plotting as utils_plt
 from utils import skeleton as utils_skel
+from models.vae import VAE
 
 import train_encodeDecode
 from ignite._utils import convert_tensor
@@ -18,12 +19,29 @@ from ignite.engine import Events
 from matplotlib.widgets import Slider, Button
 
 class IgniteTestNVS(train_encodeDecode.IgniteTrainNVS):
-    def run(self, config_dict_file, config_dict):
+    def run(self, config_dict_file, config_dict, use_second_stage=False):
         batch_size = 1
 
         # load model
-        model = self.load_network(config_dict)
-        model = model.to('cuda')
+        device = 'cuda'
+        nvs_model = self.load_network(config_dict).to(device)
+        nvs_model.eval()
+
+        if use_second_stage:
+            vae_model_fg = VAE(input_dim=config_dict['latent_fg'], hidden_dim=512, latent_dim=30).to(device)
+            model_path_fg = os.path.join(config_dict['network_path'], 'models', 'second_stage_vae_fg.pth')
+            vae_model_fg.load_state_dict(torch.load(model_path_fg))
+            vae_model_fg.eval()
+            z_dim_fg = 30
+
+            vae_model_3d = VAE(input_dim=config_dict['latent_3d'], hidden_dim=512, latent_dim=30).to(device)
+            model_path_3d = os.path.join(config_dict['network_path'], 'models', 'second_stage_vae_3d.pth')
+            vae_model_3d.load_state_dict(torch.load(model_path_3d))
+            vae_model_3d.eval()
+            z_dim_3d = 30
+        else:
+            z_dim_fg = config_dict['latent_fg']
+            z_dim_3d = config_dict['latent_3d']
 
         def tensor_to_npimg(torch_array):
             return np.swapaxes(np.swapaxes(torch_array.numpy(), 0, 2), 0, 1)
@@ -50,26 +68,38 @@ class IgniteTestNVS(train_encodeDecode.IgniteTrainNVS):
                             [0, 0, 1], ])
             return Az * Ay * Ax
 
+        # White background. Could be replaced by arbitrary background
         input_bg = torch.ones(batch_size, 3, config_dict['inputDimension'], config_dict['inputDimension']).float().cuda()
 
         # Sample from standard normal distribution
         latent_fg, latent_3d = None, None
         def sample_fg():
             nonlocal latent_fg
-            latent_fg = torch.randn(batch_size, config_dict['latent_fg']).cuda()
+            latent_fg = torch.randn(batch_size, z_dim_fg).cuda()
         def sample_3d():
             nonlocal latent_3d
-            latent_3d = torch.randn(batch_size, config_dict['latent_3d']).view(batch_size,-1,3).cuda()
+            latent_3d = torch.randn(batch_size, z_dim_3d).view(batch_size,-1,3).cuda()
         sample_fg()
         sample_3d()
+
+        # Rotation matrix
+        external_rotation_global = torch.from_numpy(rotationMatrixXZY(theta=0, phi=0, psi=0)).float().cuda()
+        external_rotation_global = external_rotation_global.view(1,3,3).expand( (batch_size, 3, 3) )
 
         # apply model on images
         output_img = None
         def predict():
             nonlocal output_img
-            model.eval()
+            nvs_model.eval()
             with torch.no_grad():
-                output_img = model.decoder(latent_fg, latent_3d, input_bg=input_bg)[0].cpu()
+                if use_second_stage:
+                    latent_fg_decoded = vae_model_fg.decode(latent_fg)
+                    latent_3d_decoded = vae_model_3d.decode(latent_3d.view(batch_size,-1)).view(batch_size,-1,3)
+                    latent_3d_decoded = torch.bmm(latent_3d_decoded, external_rotation_global.transpose(1,2))
+                    output_img = nvs_model.decoder(latent_fg_decoded, latent_3d_decoded, input_bg=input_bg)[0].cpu()
+                else:
+                    latent_3d_rot = torch.bmm(latent_3d, external_rotation_global.transpose(1,2))
+                    output_img = nvs_model.decoder(latent_fg, latent_3d_rot, input_bg=input_bg)[0].cpu()
         predict()
 
         # init figure
@@ -108,10 +138,11 @@ class IgniteTestNVS(train_encodeDecode.IgniteTrainNVS):
 
         def update_rotation(event):
             rot = slider_yaw_glob.val
-            external_rotation_global = torch.from_numpy(rotationMatrixXZY(theta=0, phi=0, psi=rot)).float().cuda()
+            nonlocal external_rotation_global
+            external_rotation_global = torch.from_numpy(rotationMatrixXZY(theta=0, phi=rot, psi=0)).float().cuda()
             external_rotation_global = external_rotation_global.view(1,3,3).expand( (batch_size, 3, 3) )
-            nonlocal latent_3d
-            latent_3d = torch.bmm(latent_3d, external_rotation_global.transpose(1,2))
+            # nonlocal latent_3d
+            # latent_3d = torch.bmm(latent_3d, external_rotation_global.transpose(1,2))
             predict()
             update_figure()
 
@@ -137,20 +168,20 @@ class IgniteTestNVS(train_encodeDecode.IgniteTrainNVS):
 
         # Slider to select FG latent dimension
         ax_latent_fg_selector = plt.axes([0.08, 0.9, 0.40, 0.03], facecolor='lightgray')
-        slider_latent_fg_selector = Slider(ax_latent_fg_selector, 'FG dim', 0, config_dict['latent_fg']-1, valinit=0, valstep=1, valfmt='%1.0f')
+        slider_latent_fg_selector = Slider(ax_latent_fg_selector, 'FG dim', 0, z_dim_fg-1, valinit=0, valstep=1, valfmt='%1.0f')
         def update_latent_fg_dim(event):
             nonlocal latent_fg_dim
             latent_fg_dim = int(slider_latent_fg_selector.val)
-            # update_fg_slsider()
+            update_fg_slsider()
         slider_latent_fg_selector.on_changed(update_latent_fg_dim)
 
         # Slider to select 3D latent dimension
         ax_latent_3d_selector = plt.axes([0.08, 0.5, 0.40, 0.03], facecolor='lightgray')
-        slider_latent_3d_selector = Slider(ax_latent_3d_selector, '3D dim', 0, config_dict['latent_3d']-1, valinit=0, valstep=1, valfmt='%1.0f')
+        slider_latent_3d_selector = Slider(ax_latent_3d_selector, '3D dim', 0, z_dim_3d-1, valinit=0, valstep=1, valfmt='%1.0f')
         def update_latent_3d_dim(event):
             nonlocal latent_3d_dim
             latent_3d_dim = int(slider_latent_3d_selector.val)
-            # update_3d_slider()
+            update_3d_slider()
         slider_latent_3d_selector.on_changed(update_latent_3d_dim)
 
         # Slider to modify FG latent dimension value
@@ -176,7 +207,7 @@ class IgniteTestNVS(train_encodeDecode.IgniteTrainNVS):
                 return
             dim1 = latent_3d_dim // 3
             dim2 = latent_3d_dim % 3
-            latent_3d[0,dim1,dim2] = slider_latent_fg_value.val
+            latent_3d[0,dim1,dim2] = slider_latent_3d_value.val
             predict()
             update_figure()
         slider_latent_3d_value.on_changed(update_latent_3d_value)
@@ -192,4 +223,4 @@ if __name__ == "__main__":
     config_dict_module = utils_io.loadModule("configs/config_test_encodeDecode.py")
     config_dict = config_dict_module.config_dict
     ignite = IgniteTestNVS()
-    ignite.run(config_dict_module.__file__, config_dict)
+    ignite.run(config_dict_module.__file__, config_dict, use_second_stage=True)

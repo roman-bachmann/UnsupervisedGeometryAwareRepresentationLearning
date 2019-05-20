@@ -5,6 +5,7 @@ import torch
 import numpy as np
 import numpy.linalg as la
 import IPython
+from tqdm import tqdm
 
 from utils import io as utils_io
 from utils import datasets as utils_data
@@ -16,7 +17,7 @@ from ignite._utils import convert_tensor
 from ignite.engine import Events
 
 
-class IgniteTestNVS(train_encodeDecode.IgniteTrainNVS):
+class LatentExtractor(train_encodeDecode.IgniteTrainNVS):
     def run(self, config_dict, save_train=False):
         config_dict['n_hidden_to3Dpose'] = config_dict.get('n_hidden_to3Dpose', 2)
 
@@ -43,6 +44,7 @@ class IgniteTestNVS(train_encodeDecode.IgniteTrainNVS):
         logvars_3d = torch.zeros(len(data_loader), config_dict['latent_3d']//3, 3)
 
         with torch.no_grad():
+            pbar = tqdm(total=len(data_loader), desc='Saving latent')
             for iter, (input_dict, label_dict) in enumerate(data_loader):
                 input_dict['external_rotation_global'] = torch.from_numpy(np.eye(3)).float().cuda()
                 input_dict_cuda, label_dict_cuda = utils_data.nestedDictToDevice((input_dict, label_dict), device=device)
@@ -54,7 +56,15 @@ class IgniteTestNVS(train_encodeDecode.IgniteTrainNVS):
                 mus_3d[iter] = output_dict['mu_3d'][0]
                 logvars_3d[iter] = output_dict['logvar_3d'][0]
 
-        save_path = './output/latent/data_train' if save_train else './output/latent/data'
+                pbar.update(1)
+            pbar.close()
+
+        config_dict['network_path'] = config_dict.get('network_path', './output/latent')
+        if save_train:
+            save_path = os.path.join(config_dict['network_path'], 'latent', 'data_train')
+        else:
+            save_path = os.path.join(config_dict['network_path'], 'latent', 'data_test')
+
         if not os.path.exists(save_path):
             os.makedirs(save_path)
         np.save(os.path.join(save_path,'mus_fg.npy'), mus_fg.numpy())
@@ -66,5 +76,7 @@ class IgniteTestNVS(train_encodeDecode.IgniteTrainNVS):
 if __name__ == "__main__":
     config_dict_module = utils_io.loadModule("configs/config_test_encodeDecode.py")
     config_dict = config_dict_module.config_dict
-    ignite = IgniteTestNVS()
-    ignite.run(config_dict, save_train=True)
+    latent_extractor = LatentExtractor()
+    # Save both training and testing image latent spaces
+    latent_extractor.run(config_dict, save_train=True)
+    latent_extractor.run(config_dict, save_train=False)

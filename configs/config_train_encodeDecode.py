@@ -138,8 +138,8 @@ if 0:
 
 # Variational Autoencoder
 if 1:
-    config_dict['variational_fg'] = False
-    config_dict['variational_3d'] = False
+    config_dict['variational_fg'] = True
+    config_dict['variational_3d'] = True
     config_dict['variational'] = config_dict['variational_fg'] or config_dict['variational_3d']
 
     config_dict['kl_annealing'] = 0 #100000

@@ -18,7 +18,7 @@ if 1:
     config_dict['latent_fg'] = 64
     config_dict['latent_3d'] = 100*3
 
-if 0:
+elif 0:
     # Deterministic AE, smaller latent space of 100*3 3D and 64 FG
     network_path = './output/trainNVS_wRGB1_wImgNet2_wKL3d0o001_wKLfg0o001_KLa0_skipBG0_3d300_fg64_3dTrue_shuffleFGTrue_shuffle3dTrue_h36m_lr0o001_vaeFGFalse_vae3dFalse_'
     config_dict['network_path'] = network_path
@@ -45,7 +45,7 @@ elif 0:
     config_dict['latent_fg'] = 128
     config_dict['latent_3d'] = 200*3
 
-else:
+elif 0:
     network_path = './examples'
     config_dict['pretrained_network_path'] = network_path + '/network_best_val_t1.pth'
     if not os.path.exists(config_dict['pretrained_network_path']):
