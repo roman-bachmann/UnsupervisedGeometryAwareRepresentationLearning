@@ -172,7 +172,7 @@ class IgniteTestNVS(train_encodeDecode.IgniteTrainNVS):
         def update_latent_fg_dim(event):
             nonlocal latent_fg_dim
             latent_fg_dim = int(slider_latent_fg_selector.val)
-            update_fg_slsider()
+            update_fg_slider()
         slider_latent_fg_selector.on_changed(update_latent_fg_dim)
 
         # Slider to select 3D latent dimension

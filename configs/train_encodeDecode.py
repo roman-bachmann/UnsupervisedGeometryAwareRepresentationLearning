@@ -150,7 +150,7 @@ class IgniteTrainNVS:
                     if config_dict['variational_fg'] and config_dict['latent_fg'] > 0:
                         mus_fg[iter] = output_dict['mu_fg'][0]
                         logvars_fg[iter] = output_dict['logvar_fg'][0]
-                    latent_fg[iter] = output_dict['shuffled_appearance'][0]
+                    latent_fg[iter] = output_dict['latent_fg'][0]
 
                     if config_dict['variational_3d']:
                         mus_3d[iter] = output_dict['mu_3d'][0]
@@ -229,7 +229,8 @@ class IgniteTrainNVS:
 
         if lower_billinear:
             use_billinear_upsampling = False
-        network_single = unet_encode3D.unet(dimension_bg=config_dict['latent_bg'],
+        network_single = unet_encode3D.unet(config_dict,
+                                            dimension_bg=config_dict['latent_bg'],
                                             dimension_fg=config_dict['latent_fg'],
                                             dimension_3d=config_dict['latent_3d'],
                                             feature_scale=config_dict['feature_scale'],
@@ -251,6 +252,7 @@ class IgniteTrainNVS:
                                             num_cameras=num_cameras,
                                             variational_fg=config_dict['variational_fg'],
                                             variational_3d=config_dict['variational_3d'],
+                                            use_second_stage=config_dict['use_second_stage'],
                                             )
 
         if 'pretrained_network_path' in config_dict.keys(): # automatic

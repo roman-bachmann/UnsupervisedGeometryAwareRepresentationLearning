@@ -3,6 +3,7 @@ from torch.nn import Linear
 from torch.nn import ReLU
 from torch.nn import Dropout
 
+import os
 import IPython
 import random
 import torch
@@ -12,6 +13,7 @@ import numpy as np
 
 from models import resnet_transfer
 from models import resnet_VNECT_3Donly
+from models.vae import VAE
 
 from models.unet_utils import *
 from models import MLP
@@ -61,7 +63,9 @@ def quat2mat(quat):
 
 
 class unet(nn.Module):
-    def __init__(self, feature_scale=4, # to reduce dimensionality
+    def __init__(self,
+                 config_dict,
+                 feature_scale=4, # to reduce dimensionality
                  in_resolution=256,
                  output_channels=3, is_deconv=True,
                  upper_billinear=False,
@@ -85,7 +89,8 @@ class unet(nn.Module):
                  output_types=['3D', 'img_crop', 'shuffled_pose', 'shuffled_appearance' ],
                  num_cameras=4,
                  variational_fg=False,
-                 variational_3d=False
+                 variational_3d=False,
+                 use_second_stage=False
                  ):
         super(unet, self).__init__()
         self.in_resolution = in_resolution
@@ -107,6 +112,7 @@ class unet(nn.Module):
         self.num_cameras = num_cameras
         self.variational_fg = variational_fg
         self.variational_3d = variational_3d
+        self.use_second_stage = use_second_stage
 
         self.skip_connections = False
         self.skip_background = skip_background
@@ -224,6 +230,19 @@ class unet(nn.Module):
         self.relu = ReLU(inplace=True)
         self.relu2 = ReLU(inplace=False)
         self.dropout = Dropout(inplace=True, p=0.3)
+
+        ####################################
+        ########## 2-stage VAE #############
+        if use_second_stage:
+            self.vae_fg = VAE(input_dim=self.dimension_fg, hidden_dim=config_dict['second_stage_hidden_dim'], latent_dim=config_dict['second_stage_latent_dim']).to('cuda')
+            model_path_fg = os.path.join(config_dict['network_path'], 'models', 'second_stage_vae_fg.pth')
+            self.vae_fg.load_state_dict(torch.load(model_path_fg))
+            self.vae_fg.eval()
+
+            self.vae_3d = VAE(input_dim=self.dimension_3d, hidden_dim=config_dict['second_stage_hidden_dim'], latent_dim=config_dict['second_stage_latent_dim']).to('cuda')
+            model_path_3d = os.path.join(config_dict['network_path'], 'models', 'second_stage_vae_3d.pth')
+            self.vae_3d.load_state_dict(torch.load(model_path_3d))
+            self.vae_3d.eval()
 
     # Determine shuffling
     def shuffle_segment(self, list, start, end):
@@ -363,8 +382,8 @@ class unet(nn.Module):
                     if self.training:
                         latent_fg = self.reparameterize(mu_fg, logvar_fg)
                     else:
-                        # latent_fg = mu_fg
-                        latent_fg = self.reparameterize(mu_fg, logvar_fg)
+                        latent_fg = mu_fg
+                        # latent_fg = self.reparameterize(mu_fg, logvar_fg)
                 else:
                     latent_fg = output[:,:self.dimension_fg]
             if self.variational_3d:
@@ -375,11 +394,12 @@ class unet(nn.Module):
                 if self.training:
                     latent_3d = self.reparameterize(mu_3d, logvar_3d)
                 else:
-                    # latent_3d = mu_3d
-                    latent_3d = self.reparameterize(mu_3d, logvar_3d)
+                    latent_3d = mu_3d
+                    # latent_3d = self.reparameterize(mu_3d, logvar_3d)
             else:
                 latent_3d = output[:,self.dimension_fg:self.dimension_fg+self.dimension_3d].contiguous().view(batch_size,-1,3)
         else: # UNet encoder
+            # TODO: Implement VAE here too
             out_enc_conv = input_dict_cropped['img_crop']
             for li in range(1,self.num_encoding_layers): # note, first layer(li==1) is already created, last layer(li==num_encoding_layers) is created externally
                 out_enc_conv = getattr(self, 'conv_'+str(li)+'_stage' + str(self.ns))(out_enc_conv)
@@ -390,6 +410,13 @@ class unet(nn.Module):
             if has_fg:
                 latent_fg = self.to_fg(center_flat)
             latent_3d = self.to_3d(center_flat).view(batch_size,-1,3)
+
+        # Use second stage VAE
+        if self.use_second_stage:
+            if has_fg:
+                latent_fg, _, _, _ = self.vae_fg(latent_fg, sample=False)
+            latent_3d, _, _, _ = self.vae_3d(latent_3d.view(batch_size,-1), sample=False)
+            latent_3d = latent_3d.view(batch_size,-1,3)
 
         ###############################################
         # latent rotation (to shuffled view)
@@ -423,8 +450,8 @@ class unet(nn.Module):
         ###############################################
         # Select the right output
         output_dict_all = {'3D' : output_pose, 'img_crop' : output_img, 'shuffled_pose' : shuffled_pose,
-                           'shuffled_appearance' : shuffled_appearance, 'latent_3d': latent_3d,
-                           'cam2cam': cam2cam }
+                           'shuffled_appearance' : shuffled_appearance, 'cam2cam': cam2cam,
+                           'latent_3d': latent_3d, 'latent_fg': latent_fg_shuffled }
         output_dict = {}
         for key in self.output_types:
             output_dict[key] = output_dict_all[key]

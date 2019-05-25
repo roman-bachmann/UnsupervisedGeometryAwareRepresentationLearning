@@ -9,7 +9,7 @@ config_dict = {
     'dpi' : 300,
     'config_class_file': 'dict_configs/config_class_encodeDecode.py',
     'input_types'       : ['img_crop','extrinsic_rot','extrinsic_rot_inv','bg_crop'],
-    'output_types'      : ['3D','img_crop', 'shuffled_appearance', 'latent_3d'],
+    'output_types'      : ['3D','img_crop', 'shuffled_appearance', 'latent_3d', 'latent_fg'],
     'label_types_train' : ['img_crop','3D','bounding_box_cam','intrinsic_crop','extrinsic_rot','extrinsic_rot_inv'], #'3D',
     'label_types_test'  : ['img_crop','3D','bounding_box_cam','intrinsic_crop','extrinsic_rot','extrinsic_rot_inv'], #'3D',
     'num_workers'       : 8,
@@ -70,7 +70,7 @@ config_dict = {
     'loss_weight_gradient' : 0.01,
     'loss_weight_imageNet' : 2,
     'loss_weight_3d' : 0,
-    'loss_weight_kl_fg' : 1,
+    'loss_weight_kl_fg' : 0.001,
     'loss_weight_kl_3d' : 0.001,
     'do_maxpooling' : False,
     'encoderType' : 'UNet',
@@ -80,7 +80,10 @@ config_dict = {
     'variational_fg' : False,
     'variational_3d' : False,
     'variational' : False,
-    'kl_annealing': 0
+    'kl_annealing': 0,
+    'second_stage_hidden_dim' : 512,
+    'second_stage_latent_dim' : 30,
+    'use_second_stage' : False,
 }
 
 # learning rate influence
@@ -142,6 +145,11 @@ if 1:
     config_dict['variational_3d'] = True
     config_dict['variational'] = config_dict['variational_fg'] or config_dict['variational_3d']
 
-    config_dict['kl_annealing'] = 0 #100000
-    config_dict['loss_weight_kl_fg'] = 0.001
+    config_dict['kl_annealing'] = 100000
+    config_dict['loss_weight_kl_fg'] = 0.00001
     config_dict['loss_weight_kl_3d'] = 0.001
+
+# Second stage VAE
+if 1:
+    config_dict['second_stage_hidden_dim'] = 512
+    config_dict['second_stage_latent_dim'] = 30

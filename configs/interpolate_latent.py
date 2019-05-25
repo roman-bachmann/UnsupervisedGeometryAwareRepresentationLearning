@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 
-import sys
+import sys, os
 import torch
 import numpy as np
 import numpy.linalg as la
@@ -10,6 +10,7 @@ from utils import io as utils_io
 from utils import datasets as utils_data
 from utils import plotting as utils_plt
 from utils import skeleton as utils_skel
+from models.vae import VAE
 
 import train_encodeDecode
 from ignite._utils import convert_tensor
@@ -18,12 +19,37 @@ from ignite.engine import Events
 from matplotlib.widgets import Slider, Button
 
 class IgniteTestNVS(train_encodeDecode.IgniteTrainNVS):
-    def run(self, config_dict_file, config_dict):
+    def run(self, config_dict_file, config_dict, use_second_stage=False):
         batch_size = 1
 
         # load model
-        model = self.load_network(config_dict)
-        model = model.to('cuda')
+        device = 'cuda'
+        nvs_model = self.load_network(config_dict).to(device)
+        nvs_model.eval()
+
+        if use_second_stage:
+            vae_model_fg = VAE(input_dim=config_dict['latent_fg'], hidden_dim=512, latent_dim=30).to(device)
+            model_path_fg = os.path.join(config_dict['network_path'], 'models', 'second_stage_vae_fg.pth')
+            vae_model_fg.load_state_dict(torch.load(model_path_fg))
+            vae_model_fg.eval()
+            z_dim_fg = 30
+
+            vae_model_3d = VAE(input_dim=config_dict['latent_3d'], hidden_dim=512, latent_dim=30).to(device)
+            model_path_3d = os.path.join(config_dict['network_path'], 'models', 'second_stage_vae_3d.pth')
+            vae_model_3d.load_state_dict(torch.load(model_path_3d))
+            vae_model_3d.eval()
+            z_dim_3d = 30
+        else:
+            z_dim_fg = config_dict['latent_fg']
+            z_dim_3d = config_dict['latent_3d']
+
+        if 0: # load small example data
+            import pickle
+            data_loader_left = pickle.load(open('examples/test_set.pickl',"rb"))
+            data_loader_right = pickle.load(open('examples/test_set.pickl',"rb"))
+        else:
+            data_loader_left = self.load_data_test(config_dict)
+            data_loader_right = self.load_data_test(config_dict)
 
         def tensor_to_npimg(torch_array):
             return np.swapaxes(np.swapaxes(torch_array.numpy(), 0, 2), 0, 1)
@@ -50,135 +76,187 @@ class IgniteTestNVS(train_encodeDecode.IgniteTrainNVS):
                             [0, 0, 1], ])
             return Az * Ay * Ax
 
+        # get next left input image
+        input_dict_left, label_dict_left = None, None
+        data_iterator_left = iter(data_loader_left)
+        def nextImageLeft():
+            nonlocal input_dict_left, label_dict_left, data_iterator_left
+            try:
+                input_dict_left, label_dict_left = next(data_iterator_left)
+            except StopIteration:
+                data_iterator_left = iter(data_loader_left)
+                input_dict_left, label_dict_left = next(data_iterator_left)
+            input_dict_left['external_rotation_global'] = torch.from_numpy(np.eye(3)).float().cuda()
+        nextImageLeft()
+
+        # get next right input image
+        input_dict_right, label_dict_right = None, None
+        data_iterator_right = iter(data_loader_right)
+        def nextImageRight():
+            nonlocal input_dict_right, label_dict_right, data_iterator_right
+            try:
+                input_dict_right, label_dict_right = next(data_iterator_right)
+            except StopIteration:
+                data_iterator_right = iter(data_loader_right)
+                input_dict_right, label_dict_right = next(data_iterator_right)
+            input_dict_right['external_rotation_global'] = torch.from_numpy(np.eye(3)).float().cuda()
+        nextImageRight()
+        nextImageRight()
+
+
+        # White background. Could be replaced by arbitrary background
         input_bg = torch.ones(batch_size, 3, config_dict['inputDimension'], config_dict['inputDimension']).float().cuda()
 
-        # Sample from standard normal distribution
-        latent_fg, latent_3d = None, None
-        def sample_fg():
-            nonlocal latent_fg
-            latent_fg = torch.randn(batch_size, config_dict['latent_fg']).cuda()
-        def sample_3d():
-            nonlocal latent_3d
-            latent_3d = torch.randn(batch_size, config_dict['latent_3d']).view(batch_size,-1,3).cuda()
-        sample_fg()
-        sample_3d()
+        # Interpolation slider values
+        alpha_fg = 0.5
+        alpha_3d = 0.5
+
+        # Rotation matrix
+        external_rotation_global = torch.from_numpy(rotationMatrixXZY(theta=0, phi=0, psi=0)).float().cuda()
+        external_rotation_global = external_rotation_global.view(1,3,3).expand( (batch_size, 3, 3) )
 
         # apply model on images
-        output_img = None
-        def predict():
-            nonlocal output_img
-            model.eval()
+        latent_fg_left, latent_3d_left, latent_fg_right, latent_3d_right = None, None, None, None
+        def predict_latent():
+            nonlocal latent_fg_left, latent_3d_left, latent_fg_right, latent_3d_right
+            nvs_model.eval()
             with torch.no_grad():
-                output_img = model.decoder(latent_fg, latent_3d, input_bg=input_bg)[0].cpu()
-        predict()
+                input_dict_left_cuda, label_dict_left_cuda = utils_data.nestedDictToDevice((input_dict_left, label_dict_left), device=device)
+                output_dict_left_cuda = nvs_model(input_dict_left_cuda)
+                # output_dict_left = utils_data.nestedDictToDevice(output_dict_left_cuda, device='cpu')
+                latent_fg_left = output_dict_left_cuda['latent_fg'][0].unsqueeze(0)
+                latent_3d_left = output_dict_left_cuda['latent_3d'][0].unsqueeze(0)
+
+                input_dict_right_cuda, label_dict_right_cuda = utils_data.nestedDictToDevice((input_dict_right, label_dict_right), device=device)
+                output_dict_right_cuda = nvs_model(input_dict_right_cuda)
+                # output_dict_right = utils_data.nestedDictToDevice(output_dict_right_cuda, device='cpu')
+                latent_fg_right = output_dict_right_cuda['latent_fg'][0].unsqueeze(0)
+                latent_3d_right = output_dict_right_cuda['latent_3d'][0].unsqueeze(0)
+
+                if use_second_stage:
+                    latent_fg_left, _ = vae_model_fg.encode(latent_fg_left)
+                    latent_3d_left, _ = vae_model_3d.encode(latent_3d_left.view(batch_size,-1))
+                    latent_fg_right, _ = vae_model_fg.encode(latent_fg_right)
+                    latent_3d_right, _ = vae_model_3d.encode(latent_3d_right.view(batch_size,-1))
+
+
+                # if use_second_stage:
+                #     latent_fg_decoded = vae_model_fg.decode(latent_fg)
+                #     latent_3d_decoded = vae_model_3d.decode(latent_3d.view(batch_size,-1)).view(batch_size,-1,3)
+                #     latent_3d_decoded = torch.bmm(latent_3d_decoded, external_rotation_global.transpose(1,2))
+                #     output_img = nvs_model.decoder(latent_fg_decoded, latent_3d_decoded, input_bg=input_bg)[0].cpu()
+                # else:
+                #     latent_3d_rot = torch.bmm(latent_3d, external_rotation_global.transpose(1,2))
+                #     output_img = nvs_model.decoder(latent_fg, latent_3d_rot, input_bg=input_bg)[0].cpu()
+        predict_latent()
+
+        # Use previously predicted latent vectors from both images to create interpolated output
+        output_img = None
+        def predict_interpolated():
+            nonlocal output_img
+
+            latent_fg = latent_fg_left + alpha_fg * (latent_fg_right - latent_fg_left)
+            latent_3d = latent_3d_left + alpha_3d * (latent_3d_right - latent_3d_left)
+
+            if use_second_stage:
+                latent_fg = vae_model_fg.decode(latent_fg)
+                latent_3d = vae_model_3d.decode(latent_3d).view(batch_size,-1,3)
+
+            latent_3d_rot = torch.bmm(latent_3d, external_rotation_global.transpose(1,2))
+            output_img = nvs_model.decoder(latent_fg, latent_3d_rot, input_bg=input_bg)[0].detach().cpu()
+        predict_interpolated()
+
 
         # init figure
         my_dpi = 400
-        fig, ax_blank = plt.subplots(figsize=(5 * 650 / my_dpi, 5 * 300 / my_dpi))
+        fig, ax_blank = plt.subplots(figsize=(5 * 900 / my_dpi, 5 * 380 / my_dpi))
         plt.axis('off')
 
-        latent_fg_dim = 0
-        latent_3d_dim = 0
+        # Left input image
+        ax_in_img_left = plt.axes([-0.20, 0.18, 0.75, 0.75])
+        ax_in_img_left.axis('off')
+        im_input_left = plt.imshow(tensor_to_img(input_dict_left['img_crop'][0]), animated=True)
+        ax_in_img_left.set_title("Input 1")
 
-        # output image
-        ax_out_img = plt.axes([0.3, 0.05, 0.95, 0.89])
+        # Output image
+        ax_out_img = plt.axes([0.125, 0.18, 0.75, 0.75])
         ax_out_img.axis('off')
         im_pred = plt.imshow(tensor_to_img(output_img), animated=True)
-        ax_out_img.set_title("Generated sample")
+        ax_out_img.set_title("Interpolated")
+
+        # Right input image
+        ax_in_img_right = plt.axes([0.45, 0.18, 0.75, 0.75])
+        ax_in_img_right.axis('off')
+        im_input_right = plt.imshow(tensor_to_img(input_dict_right['img_crop'][0]), animated=True)
+        ax_in_img_right.set_title("Input 2")
 
         # update figure with new data
         def update_figure():
             # images
+            im_input_left.set_array(tensor_to_img(input_dict_left['img_crop'][0]))
             im_pred.set_array(tensor_to_img(output_img))
+            im_input_right.set_array(tensor_to_img(input_dict_right['img_crop'][0]))
             # flush drawings
             fig.canvas.draw_idle()
 
-        def update_fg_slider():
-            nonlocal latent_fg_dim, latent_fg
-            slider_latent_fg_value.set_val(latent_fg[0,latent_fg_dim])
-
-        def update_3d_slider():
-            nonlocal latent_3d_dim, latent_3d
-            dim1 = latent_3d_dim // 3
-            dim2 = latent_3d_dim % 3
-            slider_latent_3d_value.set_val(latent_3d[0,dim1,dim2])
-
         def update_rotation(event):
             rot = slider_yaw_glob.val
-            external_rotation_global = torch.from_numpy(rotationMatrixXZY(theta=0, phi=0, psi=rot)).float().cuda()
+            nonlocal external_rotation_global
+            external_rotation_global = torch.from_numpy(rotationMatrixXZY(theta=0, phi=rot, psi=0)).float().cuda()
             external_rotation_global = external_rotation_global.view(1,3,3).expand( (batch_size, 3, 3) )
-            nonlocal latent_3d
-            latent_3d = torch.bmm(latent_3d, external_rotation_global.transpose(1,2))
-            predict()
+            predict_interpolated()
             update_figure()
 
-        # Button to sample FG from N(0,1)
-        ax_sample_fg_normal = plt.axes([0.08, 0.65, 0.2, 0.1])
-        button_sample_fg_normal = Button(ax_sample_fg_normal, 'Sample FG ~ N(0,1)', color='lightgray', hovercolor='0.975')
-        def sampleFgNormalButtonPressed(event):
-            sample_fg()
-            predict()
+        def update_alpha_fg(event):
+            nonlocal alpha_fg
+            alpha_fg = float(slider_alpha_fg_glob.val)
+            predict_interpolated()
             update_figure()
-            update_fg_slider()
-        button_sample_fg_normal.on_clicked(sampleFgNormalButtonPressed)
 
-        # Button to sample 3D from N(0,1)
-        ax_sample_3d_normal = plt.axes([0.08, 0.25, 0.2, 0.1])
-        button_sample_3d_normal = Button(ax_sample_3d_normal, 'Sample 3D ~ N(0,1)', color='lightgray', hovercolor='0.975')
-        def sample3dNormalButtonPressed(event):
-            sample_3d()
-            predict()
+        def update_alpha_3d(event):
+            nonlocal alpha_3d
+            alpha_3d = float(slider_alpha_3d_glob.val)
+            predict_interpolated()
             update_figure()
-            update_3d_slider()
-        button_sample_3d_normal.on_clicked(sample3dNormalButtonPressed)
 
-        # Slider to select FG latent dimension
-        ax_latent_fg_selector = plt.axes([0.08, 0.9, 0.40, 0.03], facecolor='lightgray')
-        slider_latent_fg_selector = Slider(ax_latent_fg_selector, 'FG dim', 0, config_dict['latent_fg']-1, valinit=0, valstep=1, valfmt='%1.0f')
-        def update_latent_fg_dim(event):
-            nonlocal latent_fg_dim
-            latent_fg_dim = int(slider_latent_fg_selector.val)
-            update_fg_slider()
-        slider_latent_fg_selector.on_changed(update_latent_fg_dim)
+        # Slider to modify interpolation alpha fg
+        ax_alpha_fg_glob = plt.axes([0.35, 0.12, 0.30, 0.03], facecolor='lightgray')
+        slider_alpha_fg_glob = Slider(ax_alpha_fg_glob, 'Alpha FG', 0, 1, valinit=0.5)
+        slider_alpha_fg_glob.on_changed(update_alpha_fg)
 
-        # Slider to select 3D latent dimension
-        ax_latent_3d_selector = plt.axes([0.08, 0.5, 0.40, 0.03], facecolor='lightgray')
-        slider_latent_3d_selector = Slider(ax_latent_3d_selector, '3D dim', 0, config_dict['latent_3d']-1, valinit=0, valstep=1, valfmt='%1.0f')
-        def update_latent_3d_dim(event):
-            nonlocal latent_3d_dim
-            latent_3d_dim = int(slider_latent_3d_selector.val)
-            update_3d_slider()
-        slider_latent_3d_selector.on_changed(update_latent_3d_dim)
-
-        # Slider to modify FG latent dimension value
-        ax_latent_fg_value = plt.axes([0.08, 0.8, 0.40, 0.03], facecolor='lightgray')
-        slider_latent_fg_value = Slider(ax_latent_fg_value, 'FG val', -3, 3, valinit=0, valfmt='%1.2f')
-        def update_latent_fg_value(event):
-            latent_fg[0,latent_fg_dim] = slider_latent_fg_value.val
-            predict()
-            update_figure()
-        slider_latent_fg_value.on_changed(update_latent_fg_value)
-
-        # Slider to modify 3D latent dimension value
-        ax_latent_3d_value = plt.axes([0.08, 0.4, 0.40, 0.03], facecolor='lightgray')
-        slider_latent_3d_value = Slider(ax_latent_3d_value, '3D val', -3, 3, valinit=0, valfmt='%1.2f')
-        def update_latent_3d_value(event):
-            dim1 = latent_3d_dim // 3
-            dim2 = latent_3d_dim % 3
-            latent_3d[0,dim1,dim2] = slider_latent_fg_value.val
-            predict()
-            update_figure()
-        slider_latent_3d_value.on_changed(update_latent_3d_value)
+        # Slider to modify interpolation alpha 3d
+        ax_alpha_3d_glob = plt.axes([0.35, 0.07, 0.30, 0.03], facecolor='lightgray')
+        slider_alpha_3d_glob = Slider(ax_alpha_3d_glob, 'Alpha 3D', 0, 1, valinit=0.5)
+        slider_alpha_3d_glob.on_changed(update_alpha_3d)
 
         # Slider to modify rotation
-        ax_yaw_glob = plt.axes([0.08, 0.1, 0.40, 0.03], facecolor='lightgray')
+        ax_yaw_glob = plt.axes([0.35, 0.02, 0.30, 0.03], facecolor='lightgray')
         slider_range = 2 * np.pi
         slider_yaw_glob = Slider(ax_yaw_glob, 'Yaw', -slider_range, slider_range, valinit=0)
         slider_yaw_glob.on_changed(update_rotation)
+
+        ax_next_left = plt.axes([0.05, 0.1, 0.15, 0.04])
+        button_next_left = Button(ax_next_left, 'Next image', color='lightgray', hovercolor='0.975')
+        def nextButtonLeftPressed(event):
+            nextImageLeft()
+            predict_latent()
+            predict_interpolated()
+            update_figure()
+        button_next_left.on_clicked(nextButtonLeftPressed)
+
+        ax_next_right = plt.axes([0.8, 0.1, 0.15, 0.04])
+        button_next_right = Button(ax_next_right, 'Next image', color='lightgray', hovercolor='0.975')
+        def nextButtonRightPressed(event):
+            nextImageRight()
+            predict_latent()
+            predict_interpolated()
+            update_figure()
+        button_next_right.on_clicked(nextButtonRightPressed)
+
         plt.show()
 
 if __name__ == "__main__":
     config_dict_module = utils_io.loadModule("configs/config_test_encodeDecode.py")
     config_dict = config_dict_module.config_dict
     ignite = IgniteTestNVS()
-    ignite.run(config_dict_module.__file__, config_dict)
+    ignite.run(config_dict_module.__file__, config_dict, use_second_stage=True)

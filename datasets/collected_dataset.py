@@ -20,7 +20,7 @@ import pickle
 
 
 class CollectedDataset(data.Dataset):
-    def __init__(self, data_folder, 
+    def __init__(self, data_folder,
                  input_types, label_types,
                  useSubjectBatches=0, useCamBatches=0,
                  randomize=True,

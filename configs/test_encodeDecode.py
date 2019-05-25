@@ -18,8 +18,9 @@ from ignite.engine import Events
 from matplotlib.widgets import Slider, Button
 
 class IgniteTestNVS(train_encodeDecode.IgniteTrainNVS):
-    def run(self, config_dict_file, config_dict):
-        config_dict['n_hidden_to3Dpose'] = config_dict.get('n_hidden_to3Dpose', 2)
+    def run(self, config_dict_file, config_dict, use_second_stage=False):
+        # config_dict['n_hidden_to3Dpose'] = config_dict.get('n_hidden_to3Dpose', 2)
+        config_dict['use_second_stage'] = use_second_stage
 
         # load data
         device='cuda'
@@ -172,4 +173,4 @@ if __name__ == "__main__":
     config_dict_module = utils_io.loadModule("configs/config_test_encodeDecode.py")
     config_dict = config_dict_module.config_dict
     ignite = IgniteTestNVS()
-    ignite.run(config_dict_module.__file__, config_dict)
+    ignite.run(config_dict_module.__file__, config_dict, use_second_stage=False)

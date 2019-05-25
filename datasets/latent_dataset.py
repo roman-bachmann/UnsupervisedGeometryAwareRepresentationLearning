@@ -6,28 +6,39 @@ from torch.utils.data import Dataset
 
 class LatentDataset(Dataset):
     # mode: {'fg', '3d', 'both'}
-    def __init__(self, data_folder, mode='both', sample_latent=True):
+    def __init__(self, config_dict, train=True, mode='both', sample_latent=True):
+        if mode not in ['fg', '3d', 'both']:
+            raise ValueError('Please set parameter \'mode\' to one of \{\'fg\', \'3d\', \'both\'\}.')
         self.sample_latent = sample_latent
+        self.config_dict = config_dict
+        self.mode = mode
+
+        if train:
+            data_folder = os.path.join(config_dict['network_path'], 'latent', 'data_train')
+        else:
+            data_folder = os.path.join(config_dict['network_path'], 'latent',  'data_test')
+
         # Load saved training data from disk
         if mode == 'fg' or mode == 'both':
-            z_mus_fg = torch.Tensor(np.load(os.path.join(data_folder, 'mus_fg.npy')))
-            z_logvars_fg = torch.Tensor(np.load(os.path.join(data_folder, 'logvars_fg.npy')))
-        if mode == '3d' or mode == 'both':
-            z_mus_3d = torch.Tensor(np.load(os.path.join(data_folder, 'mus_3d.npy')))
-            z_logvars_3d = torch.Tensor(np.load(os.path.join(data_folder, 'logvars_3d.npy')))
-            z_mus_3d = z_mus_3d.reshape(z_mus_3d.shape[0], -1)
-            z_logvars_3d = z_logvars_3d.reshape(z_logvars_3d.shape[0], -1)
+            if config_dict['variational_fg']:
+                self.z_mus_fg = torch.Tensor(np.load(os.path.join(data_folder, 'mus_fg.npy')))
+                self.z_logvars_fg = torch.Tensor(np.load(os.path.join(data_folder, 'logvars_fg.npy')))
+                self.n_samples = self.z_mus_fg.shape[0]
+            else:
+                self.z_fg = torch.Tensor(np.load(os.path.join(data_folder, 'latent_fg.npy')))
+                self.n_samples = self.z_fg.shape[0]
 
-        # Add together if both are chosen
-        if mode == 'fg':
-            self.z_mus, self.z_logvars = z_mus_fg, z_logvars_fg
-        elif mode == '3d':
-            self.z_mus, self.z_logvars = z_mus_3d, z_logvars_3d
-        elif mode == 'both':
-            self.z_mus = torch.cat([z_mus_fg, z_mus_3d], dim=1)
-            self.z_logvars = torch.cat([z_logvars_fg, z_logvars_3d], dim=1)
-        else:
-            raise ValueError('Please set parameter which to one of \{fg, 3d, both\}.')
+        if mode == '3d' or mode == 'both':
+            if config_dict['variational_3d']:
+                self.z_mus_3d = torch.Tensor(np.load(os.path.join(data_folder, 'mus_3d.npy')))
+                self.z_logvars_3d = torch.Tensor(np.load(os.path.join(data_folder, 'logvars_3d.npy')))
+                self.z_mus_3d = self.z_mus_3d.reshape(self.z_mus_3d.shape[0], -1)
+                self.z_logvars_3d = self.z_logvars_3d.reshape(self.z_logvars_3d.shape[0], -1)
+                self.n_samples = self.z_mus_3d.shape[0]
+            else:
+                self.z_3d = torch.Tensor(np.load(os.path.join(data_folder, 'latent_3d.npy')))
+                self.z_3d = self.z_3d.reshape(self.z_3d.shape[0], -1)
+                self.n_samples = self.z_3d.shape[0]
 
     def reparameterize(self, mu, logvar):
         std = torch.exp(0.5*logvar)
@@ -35,10 +46,30 @@ class LatentDataset(Dataset):
         return mu + eps*std
 
     def __getitem__(self, index):
-        if self.sample_latent:
-            return self.reparameterize(self.z_mus[index], self.z_logvars[index])
-        else:
-            return self.z_mus[index]
+        if (self.mode == 'fg' or self.mode == 'both'):
+            if self.config_dict['variational_fg']:
+                if self.sample_latent:
+                    out_fg = self.reparameterize(self.z_mus_fg[index], self.z_logvars_fg[index])
+                else:
+                    out_fg = self.z_mus_fg[index]
+            else:
+                out_fg = self.z_fg[index]
+
+        if (self.mode == '3d' or self.mode == 'both'):
+            if self.config_dict['variational_3d']:
+                if self.sample_latent:
+                    out_3d = self.reparameterize(self.z_mus_3d[index], self.z_logvars_3d[index])
+                else:
+                    out_3d = self.z_mus_3d[index]
+            else:
+                out_3d = self.z_3d[index]
+
+        if self.mode == 'fg':
+            return out_fg
+        elif self.mode == '3d':
+            return out_3d
+        elif self.mode == 'both':
+            return torch.cat([out_fg, out_3d], dim=1)
 
     def __len__(self):
-        return len(self.z_mus)
+        return self.n_samples

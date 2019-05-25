@@ -26,7 +26,10 @@ class VAE(nn.Module):
         eps = torch.randn_like(std)
         return mu + eps*std
 
-    def forward(self, x):
+    def forward(self, x, sample=True):
         mu, logvar = self.encode(x)
-        z = self.reparameterize(mu, logvar)
+        if sample:
+            z = self.reparameterize(mu, logvar)
+        else:
+            z = mu
         return self.decode(z), mu, logvar, z

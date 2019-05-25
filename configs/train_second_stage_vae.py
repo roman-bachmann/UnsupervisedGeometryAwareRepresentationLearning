@@ -30,18 +30,27 @@ torch.manual_seed(args.seed)
 
 class SecondStageTrainer():
     def __init__(self, config_dict, mode='fg'):
+        if mode not in ['fg', '3d', 'both']:
+            raise ValueError('Please set parameter \'mode\' to one of \{\'fg\', \'3d\', \'both\'\}.')
         self.config_dict = config_dict
         self.mode = mode
 
-        z_dataset_train = LatentDataset(os.path.join(config_dict['network_path'], 'latent', 'data_train'), mode=mode, sample_latent=True)
-        z_dataset_test  = LatentDataset(os.path.join(config_dict['network_path'], 'latent',  'data_test'), mode=mode, sample_latent=True)
+        z_dataset_train = LatentDataset(config_dict, train=True,  mode=mode, sample_latent=True)
+        z_dataset_test  = LatentDataset(config_dict, train=False, mode=mode, sample_latent=True)
         kwargs = {'num_workers': 4, 'pin_memory': True} if args.cuda else {}
         self.train_loader = DataLoader(z_dataset_train, batch_size=args.batch_size, shuffle=True, **kwargs)
         self.test_loader  = DataLoader( z_dataset_test, batch_size=args.batch_size, shuffle=True, **kwargs)
         print('Data loaded and datasets created')
 
-        self.k_dim = z_dataset_train.z_mus.shape[1] # Input dimension
-        self.model = VAE(input_dim=self.k_dim, hidden_dim=512, latent_dim=30).to(device)
+        # Input dimension
+        if mode == 'fg':
+            self.k_dim = config_dict['latent_fg']
+        elif mode == '3d':
+            self.k_dim = config_dict['latent_3d']
+        elif mode == 'both':
+            self.k_dim = config_dict['latent_fg'] + config_dict['latent_3d']
+
+        self.model = VAE(input_dim=self.k_dim, hidden_dim=config_dict['second_stage_hidden_dim'], latent_dim=config_dict['second_stage_latent_dim']).to(device)
         self.optimizer = optim.Adam(self.model.parameters(), lr=1e-4)
 
         self.best_test_loss = np.inf
