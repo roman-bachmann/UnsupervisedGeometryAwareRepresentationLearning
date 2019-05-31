@@ -44,6 +44,7 @@ config_dict = {
     'active_cameras' : False,
     'inputDimension' : inputDimension,
     'mirror_augmentation' : False,
+    'augment_hue' : False,
     'perspectiveCorrection' : True,
     'rotation_augmentation' : True,
     'shear_augmentation' : 0,
@@ -139,13 +140,17 @@ if 0:
     #config_dict['actor_subset'] = [1,5,6]
     #config_dict['actor_subset'] = [1,5]
 
+# Data augmentation
+if 1:
+    config_dict['augment_hue'] = True
+
 # Variational Autoencoder
 if 1:
     config_dict['variational_fg'] = True
     config_dict['variational_3d'] = True
     config_dict['variational'] = config_dict['variational_fg'] or config_dict['variational_3d']
 
-    config_dict['kl_annealing'] = 100000
+    config_dict['kl_annealing'] = 150000
     config_dict['loss_weight_kl_fg'] = 0.00001
     config_dict['loss_weight_kl_3d'] = 0.001
 

@@ -11,6 +11,17 @@ config_dict['batch_size_test'] = 1
 config_dict['n_hidden_to3Dpose'] = 2
 
 if 1:
+    # NVS VAE, smaller latent space of 100*3 3D and 64 FG, KL annealing, 0.001 KL 3D and 0.0001 KL FG weights - shorter training (only to 50k iterations)
+    network_path = './output/trainNVS_wRGB1_wImgNet2_wKL3d0o001_wKLfg1e-05_KLa150000_skipBG0_3d300_fg64_3dTrue_shuffleFGTrue_shuffle3dTrue_h36m_lr0o001_vaeFGTrue_vae3dTrue_'
+    config_dict['network_path'] = network_path
+    config_dict['pretrained_network_path'] = network_path + '/models/network_best_val_t1.pth'
+    config_dict['latent_fg'] = 64
+    config_dict['latent_3d'] = 100*3
+    config_dict['variational_fg'] = True
+    config_dict['variational_3d'] = True
+    config_dict['variational'] = True
+
+if 0:
     # NVS VAE, smaller latent space of 100*3 3D and 64 FG, KL annealing, 0.001 KL 3D and 0.0001 KL FG weights
     network_path = './output/trainNVS_wRGB1_wImgNet2_wKL3d0o001_wKLfg1e-05_KLa100000_skipBG0_3d300_fg64_3dTrue_shuffleFGTrue_shuffle3dTrue_h36m_lr0o001_vaeFGTrue_vae3dTrue_'
     config_dict['network_path'] = network_path

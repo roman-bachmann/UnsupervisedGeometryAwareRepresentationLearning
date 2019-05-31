@@ -341,8 +341,8 @@ class unet(nn.Module):
         for i,v in enumerate(shuffled_pose):
             shuffled_pose_inv[v]=i
 
-#        print('self.training',self.training,"shuffled_appearance",shuffled_appearance)
-#        print("shuffled_pose      ",shuffled_pose)
+        # print('self.training',self.training,"shuffled_appearance",shuffled_appearance)
+        # print("shuffled_pose      ",shuffled_pose)
 
         shuffled_appearance = A.Variable(torch.LongTensor(shuffled_appearance)).cuda()
         shuffled_pose       = A.Variable(torch.LongTensor(shuffled_pose)).cuda()
@@ -382,8 +382,8 @@ class unet(nn.Module):
                     if self.training:
                         latent_fg = self.reparameterize(mu_fg, logvar_fg)
                     else:
-                        latent_fg = mu_fg
-                        # latent_fg = self.reparameterize(mu_fg, logvar_fg)
+                        # latent_fg = mu_fg
+                        latent_fg = self.reparameterize(mu_fg, logvar_fg)
                 else:
                     latent_fg = output[:,:self.dimension_fg]
             if self.variational_3d:
@@ -394,8 +394,8 @@ class unet(nn.Module):
                 if self.training:
                     latent_3d = self.reparameterize(mu_3d, logvar_3d)
                 else:
-                    latent_3d = mu_3d
-                    # latent_3d = self.reparameterize(mu_3d, logvar_3d)
+                    # latent_3d = mu_3d
+                    latent_3d = self.reparameterize(mu_3d, logvar_3d)
             else:
                 latent_3d = output[:,self.dimension_fg:self.dimension_fg+self.dimension_3d].contiguous().view(batch_size,-1,3)
         else: # UNet encoder

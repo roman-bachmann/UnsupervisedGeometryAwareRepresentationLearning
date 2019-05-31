@@ -19,23 +19,22 @@ from ignite.engine import Events
 
 class LatentExtractor(train_encodeDecode.IgniteTrainNVS):
     def run(self, config_dict, save_train=False):
-        # , batch_size=32
-        # config_dict['batch_size_train'] = batch_size
-        # config_dict['batch_size_test'] = batch_size
-        # config_dict['useSubjectBatches'] = 0
-        # config_dict['useCamBatches'] = 1
-        # config_dict['useSequentialFrames'] = 1
+
+        # HACK
+        if save_train:
+            # config_dict['useSubjectBatches'] = 0
+            # config_dict['useCamBatches'] = 0
+            # config_dict['useCamBatches'] = 0
+            batch_size = 4
+        else:
+            batch_size = 2
 
         # load data
         device='cuda'
-        if 0: # load small example data
-            import pickle
-            data_loader = pickle.load(open('examples/test_set.pickl',"rb"))
+        if save_train:
+            data_loader = self.load_data_train(config_dict)
         else:
-            if save_train:
-                data_loader = self.load_data_train(config_dict)
-            else:
-                data_loader = self.load_data_test(config_dict)
+            data_loader = self.load_data_test(config_dict)
         print('Number of images:', len(data_loader))
 
         # load model
@@ -44,7 +43,7 @@ class LatentExtractor(train_encodeDecode.IgniteTrainNVS):
         model.eval()
 
         # Create empty tensors to save latent spaces in
-        nb_samples = len(data_loader) #* batch_size
+        nb_samples = len(data_loader) * batch_size
         if config_dict['variational_fg'] and config_dict['latent_fg'] > 0:
             mus_fg = torch.zeros(nb_samples, config_dict['latent_fg'])
             logvars_fg = torch.zeros(nb_samples, config_dict['latent_fg'])
@@ -59,30 +58,21 @@ class LatentExtractor(train_encodeDecode.IgniteTrainNVS):
         with torch.no_grad():
             pbar = tqdm(total=len(data_loader), desc='Saving latent')
             for iter, (input_dict, label_dict) in enumerate(data_loader):
-                input_dict['external_rotation_global'] = torch.from_numpy(np.eye(3)).float().cuda()
                 input_dict_cuda, label_dict_cuda = utils_data.nestedDictToDevice((input_dict, label_dict), device=device)
                 output_dict_cuda = model(input_dict_cuda)
                 output_dict = utils_data.nestedDictToDevice(output_dict_cuda, device='cpu')
 
-                # batch_start, batch_end = iter*batch_size, (iter+1)*batch_size
-                # if config_dict['variational_fg'] and config_dict['latent_fg'] > 0:
-                #     mus_fg[batch_start:batch_end,...] = output_dict['mu_fg'] #[0]
-                #     logvars_fg[batch_start:batch_end,...] = output_dict['logvar_fg'] #[0]
-                # latent_fg[batch_start:batch_end,...] = output_dict['latent_fg'] #[0]
-                # if config_dict['variational_3d']:
-                #     mus_3d[batch_start:batch_end,...] = output_dict['mu_3d'] #[0]
-                #     logvars_3d[batch_start:batch_end,...] = output_dict['logvar_3d'] #[0]
-                # latent_3d[batch_start:batch_end,...] = output_dict['latent_3d'] #[0]
+                idx_lo, idx_hi = iter*batch_size, (iter+1)*batch_size
 
                 if config_dict['variational_fg'] and config_dict['latent_fg'] > 0:
-                    mus_fg[iter] = output_dict['mu_fg'][0]
-                    logvars_fg[iter] = output_dict['logvar_fg'][0]
-                latent_fg[iter] = output_dict['latent_fg'][0]
+                    mus_fg[idx_lo:idx_hi] = output_dict['mu_fg']
+                    logvars_fg[idx_lo:idx_hi] = output_dict['logvar_fg']
+                latent_fg[idx_lo:idx_hi] = output_dict['latent_fg']
 
                 if config_dict['variational_3d']:
-                    mus_3d[iter] = output_dict['mu_3d'][0]
-                    logvars_3d[iter] = output_dict['logvar_3d'][0]
-                latent_3d[iter] = output_dict['latent_3d'][0]
+                    mus_3d[idx_lo:idx_hi] = output_dict['mu_3d']
+                    logvars_3d[idx_lo:idx_hi] = output_dict['logvar_3d']
+                latent_3d[idx_lo:idx_hi] = output_dict['latent_3d']
 
                 pbar.update(1)
             pbar.close()

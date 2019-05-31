@@ -259,4 +259,4 @@ if __name__ == "__main__":
     config_dict_module = utils_io.loadModule("configs/config_test_encodeDecode.py")
     config_dict = config_dict_module.config_dict
     ignite = IgniteTestNVS()
-    ignite.run(config_dict_module.__file__, config_dict, use_second_stage=True)
+    ignite.run(config_dict_module.__file__, config_dict, use_second_stage=False)

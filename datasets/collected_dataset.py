@@ -7,6 +7,7 @@ import torch.utils.data as data
 
 import h5py
 import imageio
+import cv2
 
 from random import shuffle
 
@@ -27,6 +28,7 @@ class CollectedDataset(data.Dataset):
                  mean=(0.485, 0.456, 0.406),
                  stdDev= (0.229, 0.224, 0.225),
                  useSequentialFrames=0,
+                 augment_hue=False
                  ):
         args = list(locals().items())
         # save function arguments
@@ -109,14 +111,38 @@ class CollectedDataset(data.Dataset):
         frame = int(self.label_dict['frame'][index].item())
         return cam, seq, frame, index
 
-    def getItemIntern(self, cam, seq, frame, index):
+    def getItemIntern(self, cam, seq, frame, index, dataset_idx):
         def getImageName(key):
             return self.data_folder+'/seq_{:03d}/cam_{:02d}/{}_{:06d}.png'.format(seq,cam,key,frame)
+
+        def knuths_hash(i):
+            # Hashes indexes uniformly to pseudo-random hues
+            # Alpha = next odd integer to 2^8 * (-1 + sqrt(5)) / 2
+            alpha = 159
+            return (i*alpha) % (2**8)
+
+        def hue_shift(img, shift=100):
+            '''
+            Shifts the hue component of an image by a given factor.
+
+            :param img: The original image (H x W x C)
+            :param shift: Shift hue by this factor. Between 0 and 255.
+            :return: Hue shifted image
+            '''
+            shift = shift % 255
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+            img[:,:,0] = (img[:,:,0] + shift) % 255
+            return cv2.cvtColor(img, cv2.COLOR_HSV2BGR)
+
         def loadImage(name):
-#             if not os.path.exists(name):
-#                 print('Image not available ({})'.format(name))
-#                 raise Exception('Image not available')
-            return np.array(self.transform_in(imageio.imread(name)), dtype='float32')
+            # if not os.path.exists(name):
+            #     print('Image not available ({})'.format(name))
+            #     raise Exception('Image not available')
+            img = imageio.imread(name)
+            if self.augment_hue:
+                # Shift hue by pseudo-random index
+                img = hue_shift(img, shift=knuths_hash(dataset_idx))
+            return np.array(self.transform_in(img), dtype='float32')
 
         def loadData(types):
             new_dict = {}
@@ -128,6 +154,8 @@ class CollectedDataset(data.Dataset):
             return new_dict
 
         return loadData(self.input_types), loadData(self.label_types)
+
+
 
     def __getitem__(self, index):
         if self.useSequentialFrames > 1:
@@ -145,7 +173,7 @@ class CollectedDataset(data.Dataset):
                     break
 
             # collect single results
-            single_examples = [self.getItemIntern(*self.getLocalIndices(i)) for i in index_range]
+            single_examples = [self.getItemIntern(*self.getLocalIndices(i), dataset_idx=index) for i in index_range]
             collated_examples = utils_data.default_collate_with_string(single_examples) #accumulate list of single frame results
             return collated_examples
         if self.useCamBatches > 0:
@@ -157,7 +185,7 @@ class CollectedDataset(data.Dataset):
                 if self.randomize:
                     shuffle(cam_keys)
                 cam_keys_shuffled = cam_keys[:self.useCamBatches]
-                return [self.getItemIntern(*self.getLocalIndices(camset[cami])) for cami in cam_keys_shuffled]
+                return [self.getItemIntern(*self.getLocalIndices(camset[cami]), dataset_idx=index) for cami in cam_keys_shuffled]
 
             single_examples = getCamSubbatch(key)
             if self.useSubjectBatches > 0:
@@ -170,15 +198,49 @@ class CollectedDataset(data.Dataset):
             collated_examples = utils_data.default_collate_with_string(single_examples) #accumulate list of single frame results
             return collated_examples
         else:
-            return self.getItemIntern(*self.getLocalIndices(index))
+            return self.getItemIntern(*self.getLocalIndices(index, dataset_idx=index))
 
 if __name__ == '__main__':
     dataset = CollectedDataset(
                  data_folder='/cvlabdata1/home/rbachman/DataSets/H36M/H36M-MultiView-test',
-                 input_types=['img_crop','bg_crop'], label_types=['3D'],
-                 useSubjectBatches=2, useCamBatches=4,
-                 randomize=True)
+                 input_types=['img_crop','extrinsic_rot','extrinsic_rot_inv','bg_crop'], label_types=['img_crop','3D','bounding_box_cam','intrinsic_crop','extrinsic_rot','extrinsic_rot_inv'],
+                 useSubjectBatches=2, useCamBatches=2,
+                 randomize=True, augment_hue=True)
 
-    for i in range(len(dataset)):
-        data = dataset.__getitem__(i)
-        IPython.embed()
+    # for i in range(len(dataset)):
+    #     data = dataset.__getitem__(i)
+    #     IPython.embed()
+
+    import matplotlib.pyplot as plt
+
+    def tensor_to_npimg(torch_array):
+        return np.swapaxes(np.swapaxes(torch_array.numpy(), 0, 2), 0, 1)
+
+    def denormalize(np_array):
+        return np_array * np.array((0.229, 0.224, 0.225)) + np.array((0.485, 0.456, 0.406),)
+
+    # extract image
+    def tensor_to_img(output_tensor):
+        output_img = tensor_to_npimg(output_tensor)
+        output_img = denormalize(output_img)
+        output_img = np.clip(output_img, 0, 1)
+        return output_img
+
+    trainloader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=True, num_workers=8, pin_memory=False, drop_last=True, collate_fn=utils_data.default_collate_with_string)
+    trainloader = utils_data.PostFlattenInputSubbatchTensor(trainloader)
+    data_iter = iter(trainloader)
+
+    for i in range(10):
+
+        # x,y = dataset.__getitem__(i)
+        x,y = data_iter.__next__()
+
+        for img in x['img_crop']:
+            fig, ax_blank = plt.subplots(figsize=(5 * 400 / 400, 5 * 400 / 400))
+            plt.axis('off')
+            ax_in_img = plt.axes([0, 0, 1, 1])
+            ax_in_img.axis('off')
+            im_input = plt.imshow(tensor_to_img(img), animated=False)
+            fig.canvas.draw_idle()
+            plt.show()
+            plt.close()

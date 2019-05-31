@@ -19,7 +19,7 @@ parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='enables CUDA training')
 parser.add_argument('--seed', type=int, default=1, metavar='S',
                     help='random seed (default: 1)')
-parser.add_argument('--log-interval', type=int, default=50, metavar='N',
+parser.add_argument('--log-interval', type=int, default=500, metavar='N',
                     help='how many batches to wait before logging training status')
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -126,7 +126,7 @@ class SecondStageTrainer():
         test_loss /= len(self.test_loader.dataset)
         print('====> Test set loss: {:.4f}'.format(test_loss))
         if test_loss < self.best_test_loss:
-            model_save_path = os.path.join(self.config_dict['network_path'], 'models', 'second_stage_vae_{}.pth'.format(self.mode))
+            model_save_path = os.path.join(self.config_dict['network_path'], 'models', 'second_stage_vae_{}_ldim{}.pth'.format(self.mode, self.config_dict['second_stage_latent_dim']))
             torch.save(self.model.state_dict(), model_save_path)
         return test_loss
 
@@ -134,5 +134,5 @@ class SecondStageTrainer():
 if __name__ == '__main__':
     config_dict_module = utils_io.loadModule("configs/config_test_encodeDecode.py")
     config_dict = config_dict_module.config_dict
-    SecondStageTrainer(config_dict, mode='fg')
+    # SecondStageTrainer(config_dict, mode='fg')
     SecondStageTrainer(config_dict, mode='3d')

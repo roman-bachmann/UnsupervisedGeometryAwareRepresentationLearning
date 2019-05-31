@@ -317,7 +317,7 @@ class IgniteTrainNVS:
                  input_types=config_dict['input_types'], label_types=config_dict['label_types_train'],
                  useSubjectBatches=config_dict['useSubjectBatches'], useCamBatches=config_dict['useCamBatches'], # HACK
                  useSequentialFrames=config_dict.get('useSequentialFrames',0),
-                 randomize=True)
+                 randomize=True, augment_hue=config_dict['augment_hue'])
         trainloader = torch.utils.data.DataLoader(dataset, batch_size=config_dict['batch_size_train'], shuffle=True, num_workers=config_dict['num_workers'], pin_memory=False, drop_last=True, collate_fn=utils_data.default_collate_with_string)
         trainloader = utils_data.PostFlattenInputSubbatchTensor(trainloader)
         return trainloader
@@ -329,7 +329,7 @@ class IgniteTrainNVS:
                  data_folder='/cvlabdata1/home/rbachman/DataSets/H36M/H36M-MultiView-test',
                  input_types=config_dict['input_types'], label_types=config_dict['label_types_test'],
                  useSubjectBatches=0, useCamBatches=config_dict['useCamBatches'],
-                 randomize=False)
+                 randomize=False, augment_hue=False)
         testloader = torch.utils.data.DataLoader(dataset, batch_size=config_dict['batch_size_test'], shuffle=False, num_workers=config_dict['num_workers'], pin_memory=False, drop_last=True, collate_fn=utils_data.default_collate_with_string)
         testloader = utils_data.PostFlattenInputSubbatchTensor(testloader)
         return testloader
@@ -388,7 +388,7 @@ class IgniteTrainNVS:
 
     def get_parameter_description(self, config_dict):#, config_dict):
         # folder = "./output/trainNVS_{note}_{encoderType}_layers{num_encoding_layers}_implR{implicit_rotation}_s3Dp{actor_subset_3Dpose}_w3Dp{loss_weight_pose3D}_w3D{loss_weight_3d}_wRGB{loss_weight_rgb}_wGrad{loss_weight_gradient}_wImgNet{loss_weight_imageNet}_skipBG{latent_bg}_fg{latent_fg}_3d{skip_background}_lh3Dp{n_hidden_to3Dpose}_ldrop{latent_dropout}_billin{upsampling_bilinear}_fscale{feature_scale}_shuffleFG{shuffle_fg}_shuffle3d{shuffle_3d}_{training_set}_nth{every_nth_frame}_c{active_cameras}_sub{actor_subset}_bs{useCamBatches}_lr{learning_rate}_vaeFG{variational_fg}_vae3d{variational_3d}_kl3d{loss_weight_kl_3d}_kla{kl_annealing}_".format(**config_dict)
-        folder = "./output/trainNVS_wRGB{loss_weight_rgb}_wImgNet{loss_weight_imageNet}_wKL3d{loss_weight_kl_3d}_wKLfg{loss_weight_kl_fg}_KLa{kl_annealing}_skipBG{latent_bg}_3d{latent_3d}_fg{latent_fg}_3d{skip_background}_shuffleFG{shuffle_fg}_shuffle3d{shuffle_3d}_{training_set}_lr{learning_rate}_vaeFG{variational_fg}_vae3d{variational_3d}_".format(**config_dict)
+        folder = "./output/trainNVS_wRGB{loss_weight_rgb}_wImgNet{loss_weight_imageNet}_wKL3d{loss_weight_kl_3d}_wKLfg{loss_weight_kl_fg}_KLa{kl_annealing}_skipBG{latent_bg}_3d{latent_3d}_fg{latent_fg}_3d{skip_background}_shuffleFG{shuffle_fg}_shuffle3d{shuffle_3d}_{training_set}_lr{learning_rate}_vaeFG{variational_fg}_vae3d{variational_3d}_hue{augment_hue}_".format(**config_dict)
         folder = folder.replace(' ','').replace('./','[DOT_SHLASH]').replace('.','o').replace('[DOT_SHLASH]','./').replace(',','_')
         #config_dict['storage_folder'] = folder
         return folder
