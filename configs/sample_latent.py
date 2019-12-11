@@ -18,6 +18,11 @@ from ignite.engine import Events
 
 from matplotlib.widgets import Slider, Button
 
+def save_img(img_array, name):
+    path = '/cvlabdata1/home/rbachman/imgs_out/'
+    import scipy.misc
+    scipy.misc.toimage(img_array, cmin=0.0, cmax=1.0).save(path + '{}.png'.format(name))
+
 class IgniteTestNVS(train_encodeDecode.IgniteTrainNVS):
     def run(self, config_dict_file, config_dict, use_second_stage=False):
         batch_size = 1
@@ -29,13 +34,13 @@ class IgniteTestNVS(train_encodeDecode.IgniteTrainNVS):
 
         if use_second_stage:
             vae_model_fg = VAE(input_dim=config_dict['latent_fg'], hidden_dim=512, latent_dim=30).to(device)
-            model_path_fg = os.path.join(config_dict['network_path'], 'models', 'second_stage_vae_fg.pth')
+            model_path_fg = os.path.join(config_dict['network_path'], 'models', 'second_stage_vae_fg_ldim{}.pth'.format(config_dict['second_stage_latent_dim']))
             vae_model_fg.load_state_dict(torch.load(model_path_fg))
             vae_model_fg.eval()
             z_dim_fg = 30
 
             vae_model_3d = VAE(input_dim=config_dict['latent_3d'], hidden_dim=512, latent_dim=30).to(device)
-            model_path_3d = os.path.join(config_dict['network_path'], 'models', 'second_stage_vae_3d.pth')
+            model_path_3d = os.path.join(config_dict['network_path'], 'models', 'second_stage_vae_3d_ldim{}.pth'.format(config_dict['second_stage_latent_dim']))
             vae_model_3d.load_state_dict(torch.load(model_path_3d))
             vae_model_3d.eval()
             z_dim_3d = 30
@@ -69,7 +74,7 @@ class IgniteTestNVS(train_encodeDecode.IgniteTrainNVS):
             return Az * Ay * Ax
 
         # White background. Could be replaced by arbitrary background
-        input_bg = torch.ones(batch_size, 3, config_dict['inputDimension'], config_dict['inputDimension']).float().cuda()
+        input_bg = torch.ones(batch_size, 3, config_dict['inputDimension'], config_dict['inputDimension']).float().cuda() #.uniform_(0,1) #color noise
 
         # Sample from standard normal distribution
         latent_fg, latent_3d = None, None
@@ -102,6 +107,47 @@ class IgniteTestNVS(train_encodeDecode.IgniteTrainNVS):
                     output_img = nvs_model.decoder(latent_fg, latent_3d_rot, input_bg=input_bg)[0].cpu()
         predict()
 
+        # ### Generating multiple appearances for each 3D pose
+        # n_3d = 20
+        # n_fg = 20
+        # latents_3d = torch.randn(n_3d,batch_size, z_dim_3d).view(n_3d,batch_size,-1,3).cuda()
+        # latents_fg = torch.randn(n_fg,batch_size, z_dim_fg).cuda()
+        #
+        # for i, latent_3d in enumerate(latents_3d):
+        #     for j, latent_fg in enumerate(latents_fg):
+        #         predict()
+        #         save_img(tensor_to_img(output_img), 'sample_{}_{}'.format(i,j))
+        # return
+        # ###
+
+        # ### Generating multiple random images
+        # n_3d = 20
+        # n_fg = 20
+        # latents_3d = torch.randn(n_3d,batch_size, z_dim_3d).view(n_3d,batch_size,-1,3).cuda()
+        # latents_fg = torch.randn(n_fg,batch_size, z_dim_fg).cuda()
+        #
+        # interp_steps = 25
+        #
+        # count = 0
+        # for i in range(len(latents_3d) - 1):
+        #     l3d_1, l3d_2 = latents_3d[i], latents_3d[i+1]
+        #     lfg_1, lfg_2 = latents_fg[i], latents_fg[i+1]
+        #
+        #     for j in range(interp_steps):
+        #         alpha = j / interp_steps
+        #         latent_3d = l3d_1 + alpha * (l3d_2 - l3d_1)
+        #         latent_fg = lfg_1 + alpha * (lfg_2 - lfg_1)
+        #         predict()
+        #         save_img(tensor_to_img(output_img), 'sample_{:06d}'.format(count))
+        #         print(count)
+        #         count += 1
+        #
+        # return
+        # ###
+
+
+
+
         # init figure
         my_dpi = 400
         fig, ax_blank = plt.subplots(figsize=(5 * 650 / my_dpi, 5 * 300 / my_dpi))
@@ -121,8 +167,10 @@ class IgniteTestNVS(train_encodeDecode.IgniteTrainNVS):
         def update_figure():
             # images
             im_pred.set_array(tensor_to_img(output_img))
+            # save_img(tensor_to_img(output_img), 'sample_')
             # flush drawings
             fig.canvas.draw_idle()
+
 
         def update_fg_slider():
             nonlocal latent_fg_dim, latent_fg, is_manual
@@ -223,4 +271,4 @@ if __name__ == "__main__":
     config_dict_module = utils_io.loadModule("configs/config_test_encodeDecode.py")
     config_dict = config_dict_module.config_dict
     ignite = IgniteTestNVS()
-    ignite.run(config_dict_module.__file__, config_dict, use_second_stage=False)
+    ignite.run(config_dict_module.__file__, config_dict, use_second_stage=True)

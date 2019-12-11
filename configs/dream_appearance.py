@@ -92,8 +92,8 @@ class DreamAppearance(train_encodeDecode.IgniteTrainNVS):
             with torch.no_grad():
                 z_3d_rot = torch.bmm(z_3d, external_rotation_global.transpose(1,2))
                 return model.decoder(z_fg, z_3d_rot, input_bg=input_bg)[0].detach().cpu()
-        output_img_orig = subseq_prediction(latent_fg_orig, latent_3d_orig)
-        output_img_dream = subseq_prediction(latent_fg, latent_3d)
+        output_img_orig = subseq_prediction(latent_fg_orig.clone(), latent_3d_orig.clone())
+        output_img_dream = subseq_prediction(latent_fg.clone(), latent_3d.clone())
 
         # init figure
         my_dpi = 400
@@ -162,7 +162,8 @@ class DreamAppearance(train_encodeDecode.IgniteTrainNVS):
             optimize_latent()
             # latent_fg += 0.1
             # latent_3d += 0.1
-            output_img_dream = subseq_prediction(latent_fg, latent_3d)
+            with torch.no_grad():
+                output_img_dream = subseq_prediction(latent_fg, latent_3d)
             update_figure()
         button_step.on_clicked(stepButtonPressed)
 
@@ -171,11 +172,12 @@ class DreamAppearance(train_encodeDecode.IgniteTrainNVS):
         imgNet_loss_fn = losses_images.ImageNetCriterium(criterion=pixel_loss_fn, weight=2, do_maxpooling=True)
 
 
-        def optimize_latent(lr = 0.0001, steps=10):
+        def optimize_latent(lr = 0.001, steps=25):
             nonlocal latent_fg, latent_3d
             model.train()
-            latent_fg = Variable(latent_fg, requires_grad=True)
-            latent_3d = Variable(latent_3d, requires_grad=True)
+            # latent_fg = Variable(latent_fg, requires_grad=True)
+            # latent_3d = Variable(latent_3d, requires_grad=True)
+            latent_fg.requires_grad = True
             for i in range(steps):
                 print(i)
                 model.zero_grad()
@@ -184,8 +186,15 @@ class DreamAppearance(train_encodeDecode.IgniteTrainNVS):
                 imgNet_loss = imgNet_loss_fn(out_img.unsqueeze(0), input_img[0].unsqueeze(0))
                 loss = pixel_loss + imgNet_loss
                 loss.backward()
-                latent_fg.data.add_(- lr * latent_fg.grad.data)
-                latent_3d.data.add_(- lr * latent_3d.grad.data)
+                # print(latent_fg.data)
+                # print(latent_fg.grad.data)
+                # print(latent_fg.grad.data.mean())
+                with torch.no_grad():
+                    latent_fg -= lr * latent_fg.grad
+                latent_fg.requires_grad = True
+                # latent_fg.data.add_(-lr * latent_fg.grad.data)
+                # latent_3d.data.add_(- lr * latent_3d.grad.data)
+            print(loss.item())
             latent_fg = latent_fg.data.detach()
             latent_3d = latent_3d.data.detach()
 

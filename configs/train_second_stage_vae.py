@@ -13,7 +13,7 @@ from utils import io as utils_io
 parser = argparse.ArgumentParser(description='Seconds stage VAE')
 parser.add_argument('--batch-size', type=int, default=128, metavar='N',
                     help='input batch size for training (default: 128)')
-parser.add_argument('--epochs', type=int, default=100, metavar='N',
+parser.add_argument('--epochs', type=int, default=50, metavar='N',
                     help='number of epochs to train (default: 100)')
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='enables CUDA training')
@@ -128,11 +128,13 @@ class SecondStageTrainer():
         if test_loss < self.best_test_loss:
             model_save_path = os.path.join(self.config_dict['network_path'], 'models', 'second_stage_vae_{}_ldim{}.pth'.format(self.mode, self.config_dict['second_stage_latent_dim']))
             torch.save(self.model.state_dict(), model_save_path)
+            print('Model saved')
+            self.best_test_loss = test_loss
         return test_loss
 
 
 if __name__ == '__main__':
     config_dict_module = utils_io.loadModule("configs/config_test_encodeDecode.py")
     config_dict = config_dict_module.config_dict
-    # SecondStageTrainer(config_dict, mode='fg')
+    SecondStageTrainer(config_dict, mode='fg')
     SecondStageTrainer(config_dict, mode='3d')

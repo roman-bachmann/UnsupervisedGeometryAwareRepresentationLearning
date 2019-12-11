@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 
-import sys
+import sys, os
 import torch
 import numpy as np
 import numpy.linalg as la
@@ -17,18 +17,26 @@ from ignite.engine import Events
 
 from matplotlib.widgets import Slider, Button
 
+def save_img(img_array, subdir, name):
+    PATH = os.path.join('/cvlabdata1/home/rbachman/imgs_out/', str(subdir))
+    os.makedirs(PATH, exist_ok=True)
+    import scipy.misc
+    scipy.misc.toimage(img_array, cmin=0.0, cmax=1.0).save(os.path.join(PATH, '{}.png'.format(name)))
+
 class IgniteTestNVS(train_encodeDecode.IgniteTrainNVS):
     def run(self, config_dict_file, config_dict, use_second_stage=False):
         # config_dict['n_hidden_to3Dpose'] = config_dict.get('n_hidden_to3Dpose', 2)
+
         config_dict['use_second_stage'] = use_second_stage
 
         # load data
         device='cuda'
-        if 1: # load small example data
+        if 0: # load small example data
             import pickle
             data_loader = pickle.load(open('examples/test_set.pickl',"rb"))
         else:
             data_loader = self.load_data_test(config_dict)
+            # data_loader = self.load_data_train(config_dict)
             # save example data
             if 0:
                 import pickle
@@ -74,7 +82,9 @@ class IgniteTestNVS(train_encodeDecode.IgniteTrainNVS):
             nonlocal input_dict, label_dict
             input_dict, label_dict = next(data_iterator)
             input_dict['external_rotation_global'] = torch.from_numpy(np.eye(3)).float().cuda()
-        nextImage()
+        # 1,2,4,5,8
+        for i in range(1):
+            nextImage()
 
 
         # apply model on images
@@ -82,11 +92,36 @@ class IgniteTestNVS(train_encodeDecode.IgniteTrainNVS):
         def predict():
             nonlocal output_dict
             model.eval()
+            # model.train()
             with torch.no_grad():
                 input_dict_cuda, label_dict_cuda = utils_data.nestedDictToDevice((input_dict, label_dict), device=device)
                 output_dict_cuda = model(input_dict_cuda)
                 output_dict = utils_data.nestedDictToDevice(output_dict_cuda, device='cpu')
         predict()
+
+
+        ### Save random poses with rotations
+
+        n_poses = 10
+        n_skip = 20
+        rotations = np.linspace(0, 2*np.pi, 100, endpoint=False)
+
+        for i in range(n_poses):
+            print(i)
+            save_img(tensor_to_img(input_dict['img_crop'][0]), i, 'in')
+            for idx, rads in enumerate(rotations):
+                rot = float(rads)
+                input_dict['external_rotation_global'] = torch.from_numpy(rotationMatrixXZY(theta=0, phi=0, psi=rot)).float().cuda()
+                input_dict['external_rotation_cam'] = torch.from_numpy(np.eye(3)).float().cuda()
+                predict()
+                save_img(tensor_to_img(output_dict['img_crop'][0]), i, 'out_{:06d}'.format(idx))
+
+            for j in range(n_skip):
+                nextImage()
+
+        return
+        #####
+
 
         # init figure
         my_dpi = 400
@@ -123,11 +158,18 @@ class IgniteTestNVS(train_encodeDecode.IgniteTrainNVS):
         im_pred = plt.imshow(tensor_to_img(output_dict['img_crop'][0]), animated=True)
         ax_out_img.set_title("Output img")
 
+        globidx = 0
+
         # update figure with new data
         def update_figure():
             # images
             im_input.set_array(tensor_to_img(input_dict['img_crop'][0]))
             im_pred.set_array(tensor_to_img(output_dict['img_crop'][0]))
+
+            # save_img(tensor_to_img(input_dict['img_crop'][0]), 'in')
+            # save_img(tensor_to_img(input_dict['bg_crop'][0]), 'bg')
+            save_img(tensor_to_img(output_dict['img_crop'][0]), 'out_{}'.format(globidx))
+
             # gt 3D poses
             gt_pose = label_dict['3D'][0]
             R_cam_2_world = label_dict['extrinsic_rot_inv'][0].numpy()
@@ -148,13 +190,17 @@ class IgniteTestNVS(train_encodeDecode.IgniteTrainNVS):
 
         def update_rotation(event):
             rot = slider_yaw_glob.val
-            # rot = 0 # Cheat to sample at rotation 0 while pulling slider
-            print("Rotationg ",rot)
+            rot = 0 # Cheat to sample at rotation 0 while pulling slider
+            print("Rotation ",rot)
             batch_size = input_dict['img_crop'].size()[0]
             input_dict['external_rotation_global'] = torch.from_numpy(rotationMatrixXZY(theta=0, phi=0, psi=rot)).float().cuda()
             input_dict['external_rotation_cam'] = torch.from_numpy(np.eye(3)).float().cuda() # torch.from_numpy(rotationMatrixXZY(theta=0, phi=rot, psi=0)).float().cuda()
-            predict()
-            update_figure()
+            # nonlocal globidx
+            # save_img(tensor_to_img(input_dict['img_crop'][0]), 'in')
+            # for i in range(500):
+            #     globidx = i
+            #     predict()
+            #     update_figure()
 
         ax_next = plt.axes([0.05, 0.1, 0.15, 0.04])
         button_next = Button(ax_next, 'Next image', color='lightgray', hovercolor='0.975')
@@ -173,4 +219,4 @@ if __name__ == "__main__":
     config_dict_module = utils_io.loadModule("configs/config_test_encodeDecode.py")
     config_dict = config_dict_module.config_dict
     ignite = IgniteTestNVS()
-    ignite.run(config_dict_module.__file__, config_dict, use_second_stage=False)
+    ignite.run(config_dict_module.__file__, config_dict, use_second_stage=True)

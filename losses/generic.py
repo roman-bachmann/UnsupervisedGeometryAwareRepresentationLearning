@@ -63,12 +63,13 @@ class PreApplyCriterionDictDict(torch.nn.Module):
     Wraps a loss operating on tensors into one that processes dict of labels and predictions.
     Includes KL annealing.
     """
-    def __init__(self, criterions_single, sum_losses=True, loss_weights=None, KL_annealing=0):
+    def __init__(self, criterions_single, sum_losses=True, loss_weights=None, KL_annealing=0, cyclical_beta=0):
         super(PreApplyCriterionDictDict, self).__init__()
         self.criterions_single = criterions_single
         self.sum_losses = sum_losses
         self.loss_weights = loss_weights
         self.KL_annealing = KL_annealing
+        self.cyclical_beta = cyclical_beta
 
     def forward(self, pred_dict, label_dict, iteration=-1):
         """
@@ -77,7 +78,15 @@ class PreApplyCriterionDictDict(torch.nn.Module):
         :param label_dict: List containing the labels
         :return: The sum of all the loss values computed
         """
-        annealing_factor = 1 if iteration < 0 or iteration >= self.KL_annealing else iteration / self.KL_annealing
+        if self.cyclical_beta == 0:
+            annealing_factor = 1 if iteration < 0 or iteration >= self.KL_annealing else iteration / self.KL_annealing
+        else:
+            cycle_iter = iteration % self.KL_annealing
+            upramp_cycle = self.cyclical_beta * self.KL_annealing
+            if cycle_iter >= upramp_cycle:
+                annealing_factor = 1
+            else:
+                annealing_factor = cycle_iter / upramp_cycle
 
         losslist = []
         for criterion_id, criterion_single in self.criterions_single.items():

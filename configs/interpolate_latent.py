@@ -18,6 +18,11 @@ from ignite.engine import Events
 
 from matplotlib.widgets import Slider, Button
 
+def save_img(img_array, name):
+    path = '/cvlabdata1/home/rbachman/imgs_out/'
+    import scipy.misc
+    scipy.misc.toimage(img_array, cmin=0.0, cmax=1.0).save(path + '{}.png'.format(name))
+
 class IgniteTestNVS(train_encodeDecode.IgniteTrainNVS):
     def run(self, config_dict_file, config_dict, use_second_stage=False):
         batch_size = 1
@@ -29,13 +34,13 @@ class IgniteTestNVS(train_encodeDecode.IgniteTrainNVS):
 
         if use_second_stage:
             vae_model_fg = VAE(input_dim=config_dict['latent_fg'], hidden_dim=512, latent_dim=30).to(device)
-            model_path_fg = os.path.join(config_dict['network_path'], 'models', 'second_stage_vae_fg.pth')
+            model_path_fg = os.path.join(config_dict['network_path'], 'models', 'second_stage_vae_fg_ldim{}.pth'.format(config_dict['second_stage_latent_dim']))
             vae_model_fg.load_state_dict(torch.load(model_path_fg))
             vae_model_fg.eval()
             z_dim_fg = 30
 
             vae_model_3d = VAE(input_dim=config_dict['latent_3d'], hidden_dim=512, latent_dim=30).to(device)
-            model_path_3d = os.path.join(config_dict['network_path'], 'models', 'second_stage_vae_3d.pth')
+            model_path_3d = os.path.join(config_dict['network_path'], 'models', 'second_stage_vae_3d_ldim{}.pth'.format(config_dict['second_stage_latent_dim']))
             vae_model_3d.load_state_dict(torch.load(model_path_3d))
             vae_model_3d.eval()
             z_dim_3d = 30
@@ -50,6 +55,8 @@ class IgniteTestNVS(train_encodeDecode.IgniteTrainNVS):
         else:
             data_loader_left = self.load_data_test(config_dict)
             data_loader_right = self.load_data_test(config_dict)
+            # data_loader_left = self.load_data_train(config_dict)
+            # data_loader_right = self.load_data_train(config_dict)
 
         def tensor_to_npimg(torch_array):
             return np.swapaxes(np.swapaxes(torch_array.numpy(), 0, 2), 0, 1)
@@ -76,32 +83,39 @@ class IgniteTestNVS(train_encodeDecode.IgniteTrainNVS):
                             [0, 0, 1], ])
             return Az * Ay * Ax
 
+        index_left = -1
+        index_right = -1
+
         # get next left input image
         input_dict_left, label_dict_left = None, None
         data_iterator_left = iter(data_loader_left)
         def nextImageLeft():
-            nonlocal input_dict_left, label_dict_left, data_iterator_left
+            nonlocal input_dict_left, label_dict_left, data_iterator_left, index_left
             try:
                 input_dict_left, label_dict_left = next(data_iterator_left)
             except StopIteration:
                 data_iterator_left = iter(data_loader_left)
                 input_dict_left, label_dict_left = next(data_iterator_left)
             input_dict_left['external_rotation_global'] = torch.from_numpy(np.eye(3)).float().cuda()
+            index_left += 1
+            print('left {}, right {}'.format(index_left, index_right))
         nextImageLeft()
 
         # get next right input image
         input_dict_right, label_dict_right = None, None
         data_iterator_right = iter(data_loader_right)
         def nextImageRight():
-            nonlocal input_dict_right, label_dict_right, data_iterator_right
+            nonlocal input_dict_right, label_dict_right, data_iterator_right, index_right
             try:
                 input_dict_right, label_dict_right = next(data_iterator_right)
             except StopIteration:
                 data_iterator_right = iter(data_loader_right)
                 input_dict_right, label_dict_right = next(data_iterator_right)
             input_dict_right['external_rotation_global'] = torch.from_numpy(np.eye(3)).float().cuda()
+            index_right += 1
+            print('left {}, right {}'.format(index_left, index_right))
         nextImageRight()
-        nextImageRight()
+        # nextImageRight()
 
 
         # White background. Could be replaced by arbitrary background
@@ -201,11 +215,25 @@ class IgniteTestNVS(train_encodeDecode.IgniteTrainNVS):
 
         def update_rotation(event):
             rot = slider_yaw_glob.val
-            nonlocal external_rotation_global
-            external_rotation_global = torch.from_numpy(rotationMatrixXZY(theta=0, phi=rot, psi=0)).float().cuda()
-            external_rotation_global = external_rotation_global.view(1,3,3).expand( (batch_size, 3, 3) )
-            predict_interpolated()
+            # nonlocal external_rotation_global
+            # external_rotation_global = torch.from_numpy(rotationMatrixXZY(theta=0, phi=rot, psi=0)).float().cuda()
+            # external_rotation_global = external_rotation_global.view(1,3,3).expand( (batch_size, 3, 3) )
+            # predict_interpolated()
+            # update_figure()
+            nonlocal alpha_3d, alpha_fg
+            save_img(tensor_to_img(input_dict_left['img_crop'][0]), '{}_{}-in_left'.format(index_left, index_right))
+            save_img(tensor_to_img(input_dict_right['img_crop'][0]), '{}_{}-in_right'.format(index_left, index_right))
+            # alpha_values = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+            alpha_values = np.linspace(0,1,100)
+            for idx, a in enumerate(alpha_values):
+                print(idx)
+                alpha_3d = float(a)
+                alpha_fg = float(a)
+                predict_interpolated()
+                # save_img(tensor_to_img(output_img), '{}_{}-sample_{}'.format(index_left, index_right, idx))
+                save_img(tensor_to_img(output_img), 'sample_{:06d}'.format(idx))
             update_figure()
+
 
         def update_alpha_fg(event):
             nonlocal alpha_fg
@@ -259,4 +287,4 @@ if __name__ == "__main__":
     config_dict_module = utils_io.loadModule("configs/config_test_encodeDecode.py")
     config_dict = config_dict_module.config_dict
     ignite = IgniteTestNVS()
-    ignite.run(config_dict_module.__file__, config_dict, use_second_stage=False)
+    ignite.run(config_dict_module.__file__, config_dict, use_second_stage=True)

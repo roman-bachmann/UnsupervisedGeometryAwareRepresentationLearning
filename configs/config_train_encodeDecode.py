@@ -82,6 +82,7 @@ config_dict = {
     'variational_3d' : False,
     'variational' : False,
     'kl_annealing': 0,
+    'cyclical_beta': 0,
     'second_stage_hidden_dim' : 512,
     'second_stage_latent_dim' : 30,
     'use_second_stage' : False,
@@ -141,7 +142,7 @@ if 0:
     #config_dict['actor_subset'] = [1,5]
 
 # Data augmentation
-if 1:
+if 0:
     config_dict['augment_hue'] = True
 
 # Variational Autoencoder
@@ -151,6 +152,8 @@ if 1:
     config_dict['variational'] = config_dict['variational_fg'] or config_dict['variational_3d']
 
     config_dict['kl_annealing'] = 150000
+    config_dict['cyclical_beta'] = 0 #0.75
+    # config_dict['num_training_iterations'] = 600000
     config_dict['loss_weight_kl_fg'] = 0.00001
     config_dict['loss_weight_kl_3d'] = 0.001
 

@@ -9,6 +9,7 @@ import h5py
 import imageio
 import cv2
 
+import random
 from random import shuffle
 
 import IPython
@@ -121,7 +122,7 @@ class CollectedDataset(data.Dataset):
             alpha = 159
             return (i*alpha) % (2**8)
 
-        def hue_shift(img, shift=100):
+        def hue_shift(img, shift=0):
             '''
             Shifts the hue component of an image by a given factor.
 
@@ -183,7 +184,7 @@ class CollectedDataset(data.Dataset):
                 cam_keys = list(camset.keys())
                 assert self.useCamBatches <= len(cam_keys)
                 if self.randomize:
-                    shuffle(cam_keys)
+                    random.Random(500).shuffle(cam_keys)
                 cam_keys_shuffled = cam_keys[:self.useCamBatches]
                 return [self.getItemIntern(*self.getLocalIndices(camset[cami]), dataset_idx=index) for cami in cam_keys_shuffled]
 

@@ -235,12 +235,12 @@ class unet(nn.Module):
         ########## 2-stage VAE #############
         if use_second_stage:
             self.vae_fg = VAE(input_dim=self.dimension_fg, hidden_dim=config_dict['second_stage_hidden_dim'], latent_dim=config_dict['second_stage_latent_dim']).to('cuda')
-            model_path_fg = os.path.join(config_dict['network_path'], 'models', 'second_stage_vae_fg.pth')
+            model_path_fg = os.path.join(config_dict['network_path'], 'models', 'second_stage_vae_fg_ldim{}.pth'.format(config_dict['second_stage_latent_dim']))
             self.vae_fg.load_state_dict(torch.load(model_path_fg))
             self.vae_fg.eval()
 
             self.vae_3d = VAE(input_dim=self.dimension_3d, hidden_dim=config_dict['second_stage_hidden_dim'], latent_dim=config_dict['second_stage_latent_dim']).to('cuda')
-            model_path_3d = os.path.join(config_dict['network_path'], 'models', 'second_stage_vae_3d.pth')
+            model_path_3d = os.path.join(config_dict['network_path'], 'models', 'second_stage_vae_3d_ldim{}.pth'.format(config_dict['second_stage_latent_dim']))
             self.vae_3d.load_state_dict(torch.load(model_path_3d))
             self.vae_3d.eval()
 
@@ -382,8 +382,8 @@ class unet(nn.Module):
                     if self.training:
                         latent_fg = self.reparameterize(mu_fg, logvar_fg)
                     else:
-                        # latent_fg = mu_fg
-                        latent_fg = self.reparameterize(mu_fg, logvar_fg)
+                        latent_fg = mu_fg
+                        # latent_fg = self.reparameterize(mu_fg, logvar_fg)
                 else:
                     latent_fg = output[:,:self.dimension_fg]
             if self.variational_3d:
@@ -394,8 +394,8 @@ class unet(nn.Module):
                 if self.training:
                     latent_3d = self.reparameterize(mu_3d, logvar_3d)
                 else:
-                    # latent_3d = mu_3d
-                    latent_3d = self.reparameterize(mu_3d, logvar_3d)
+                    latent_3d = mu_3d
+                    # latent_3d = self.reparameterize(mu_3d, logvar_3d)
             else:
                 latent_3d = output[:,self.dimension_fg:self.dimension_fg+self.dimension_3d].contiguous().view(batch_size,-1,3)
         else: # UNet encoder
